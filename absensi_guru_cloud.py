@@ -1,150 +1,214 @@
+# absensi_guru_cloud.py
 import streamlit as st
 from datetime import datetime, time
 import pandas as pd
-import sqlite3
-from fpdf import FPDF
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import plotly.express as px
 import json
-import os
+import plotly.express as px
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
 # ---------------------------
-# Koneksi database SQLite
+# Config & Secrets
 # ---------------------------
-conn = sqlite3.connect("absensi.db", check_same_thread=False)
-c = conn.cursor()
+SPREADSHEET_URL = st.secrets.get("SPREADSHEET_URL", None)
+GOOGLE_SERVICE_ACCOUNT = st.secrets.get("GOOGLE_SERVICE_ACCOUNT", None)
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS absensi (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tanggal TEXT,
-    nama TEXT,
-    jam TEXT,
-    status_piket TEXT,
-    denda INTEGER
-)
-""")
-conn.commit()
+if SPREADSHEET_URL is None or GOOGLE_SERVICE_ACCOUNT is None:
+    st.error("Secrets belum lengkap. Pastikan SPREADSHEET_URL dan GOOGLE_SERVICE_ACCOUNT sudah diisi di Streamlit Secrets.")
+    st.stop()
 
 # ---------------------------
-# Koneksi Google Sheets
+# Auth ke Google Sheets
 # ---------------------------
-SPREADSHEET_URL = st.secrets["SPREADSHEET_URL"]
+try:
+    credentials_dict = json.loads(GOOGLE_SERVICE_ACCOUNT)
+except Exception as e:
+    st.error("Gagal membaca GOOGLE_SERVICE_ACCOUNT dari secrets. Pastikan format JSON benar.")
+    st.stop()
 
-gc = gspread.service_account(
-    filename="credentials.json",
-    scopes=['https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive']
-)
-
-sh = gc.open_by_url(SPREADSHEET_URL)
-worksheet = sh.sheet1
+scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scopes)
+gc = gspread.authorize(creds)
 
 # ---------------------------
-# Data Guru
+# Buka atau buat worksheet "Absensi"
+# ---------------------------
+try:
+    sh = gc.open_by_url(SPREADSHEET_URL)
+except Exception as e:
+    st.error("Gagal membuka spreadsheet. Periksa SPREADSHEET_URL dan permission service account.")
+    st.stop()
+
+# Pilih worksheet bernama "Absensi" jika ada, kalau tidak ada buat baru
+sheet_title = "Absensi"
+try:
+    worksheet = sh.worksheet(sheet_title)
+except gspread.exceptions.WorksheetNotFound:
+    worksheet = sh.add_worksheet(title=sheet_title, rows="1000", cols="20")
+    # Buat header default
+    header = ["Tanggal", "Nama Guru", "Status", "Jam Masuk", "Jam Pulang", "Denda", "Keterangan"]
+    worksheet.append_row(header)
+
+# ---------------------------
+# Daftar guru (sesuaikan jika perlu)
 # ---------------------------
 guru_list = ["Yolan", "Husnia", "Rima", "Rifa", "Sela", "Ustadz A", "Ustadz B", "Ustadz C"]
 
 # ---------------------------
-# Header
+# Navigasi Menu
 # ---------------------------
-st.markdown("<h1 style='text-align: center; color: blue;'>Absensi Guru SD Tahfidz BKQ</h1>", unsafe_allow_html=True)
+menu = st.sidebar.radio("📌 Menu", ["Absensi", "Rekap", "Grafik"])
 
-tanggal_sekarang = datetime.now()
-st.markdown(
-    f"<p style='text-align: center;'>Tanggal: {tanggal_sekarang.strftime('%A, %d %B %Y')}<br>Jam: {tanggal_sekarang.strftime('%H:%M:%S')}</p>",
-    unsafe_allow_html=True
-)
-
-# ---------------------------
-# Input
-# ---------------------------
-st.subheader("Input Absensi")
-nama_guru = st.selectbox("Nama Guru", guru_list)
-status_piket = st.radio("Status Piket", ["Piket", "Tidak Piket"], horizontal=True)
-
-# Denda Logic
-jam_piket = time(7, 0)
-jam_biasa = time(7, 15)
-jam_sekarang = tanggal_sekarang.time()
-denda = 0
-terlambat = False
-
-if status_piket == "Piket" and jam_sekarang > jam_piket:
-    terlambat = True
-    denda = 2000
-elif status_piket == "Tidak Piket" and jam_sekarang > jam_biasa:
-    terlambat = True
-    denda = 2000
-
-if terlambat:
-    st.warning(f"{nama_guru} TERLAMBAT! Denda: Rp {denda}")
-else:
-    st.success(f"{nama_guru} hadir tepat waktu. Tidak ada denda.")
-
-if st.button("Absen Sekarang", key="absen_btn"):
-    # Simpan ke SQLite
-    c.execute("INSERT INTO absensi (tanggal, nama, jam, status_piket, denda) VALUES (?, ?, ?, ?, ?)",
-              (tanggal_sekarang.strftime("%Y-%m-%d"),
-               nama_guru,
-               tanggal_sekarang.strftime("%H:%M:%S"),
-               status_piket,
-               denda))
-    conn.commit()
-
-    # Backup ke Google Sheets
-    worksheet.append_row([
-        tanggal_sekarang.strftime("%Y-%m-%d"),
-        nama_guru,
-        tanggal_sekarang.strftime("%H:%M:%S"),
-        status_piket,
-        denda
-    ])
-
-    st.success("Absensi berhasil dicatat!")
+# Utility: baca semua data dari worksheet ke DataFrame
+@st.cache_data(ttl=30)
+def load_sheet_df():
+    try:
+        records = worksheet.get_all_records()
+        if records:
+            df = pd.DataFrame(records)
+        else:
+            df = pd.DataFrame(columns=["Tanggal","Nama Guru","Status","Jam Masuk","Jam Pulang","Denda","Keterangan"])
+        return df
+    except Exception as e:
+        st.error(f"Gagal membaca data dari Google Sheet: {e}")
+        return pd.DataFrame(columns=["Tanggal","Nama Guru","Status","Jam Masuk","Jam Pulang","Denda","Keterangan"])
 
 # ---------------------------
-# Rekap Hari Ini
+# Absensi Page
 # ---------------------------
-st.subheader("Rekap Absensi Hari Ini")
-df_hari = pd.read_sql("SELECT * FROM absensi WHERE tanggal = ?",
-                      conn,
-                      params=(tanggal_sekarang.strftime("%Y-%m-%d"),))
+if menu == "Absensi":
+    st.title("📌 Absensi Guru SD Tahfidz BKQ")
 
-st.dataframe(df_hari, height=250)
+    tanggal_sekarang = datetime.now()
+    st.markdown(f"**Tanggal:** {tanggal_sekarang.strftime('%A, %d %B %Y')} — **Jam:** {tanggal_sekarang.strftime('%H:%M:%S')}")
 
-# Download CSV
-csv_hari = df_hari.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="Download Rekap Hari Ini (CSV)",
-    data=csv_hari,
-    file_name=f"rekap_absensi_{tanggal_sekarang.strftime('%Y-%m-%d')}.csv",
-    mime="text/csv"
-)
+    st.subheader("Input Absensi")
+    with st.form("form_absen", clear_on_submit=True):
+        col1, col2 = st.columns([2,2])
+        with col1:
+            nama_guru = st.selectbox("Nama Guru", guru_list)
+        with col2:
+            status = st.selectbox("Status", ["Hadir", "Izin", "Sakit", "Alpha", "Telat (Piket)", "Telat (Biasa)"])
+        jam_masuk = st.text_input("Jam Masuk (HH:MM) — kosongkan untuk auto", value=tanggal_sekarang.strftime("%H:%M:%S"))
+        jam_pulang = st.text_input("Jam Pulang (HH:MM) — optional", value="")
+        keterangan = st.text_input("Keterangan (opsional)", value="")
+
+        submitted = st.form_submit_button("Absen Sekarang")
+        if submitted:
+            # Logika denda: jika status telat (dua jenis) set denda 2000
+            denda = 0
+            if status.startswith("Telat"):
+                denda = 2000
+
+            # Prepare row sesuai header
+            row = [
+                tanggal_sekarang.strftime("%Y-%m-%d"),
+                nama_guru,
+                "Hadir" if status == "Hadir" else status,  # keep values
+                jam_masuk,
+                jam_pulang,
+                denda,
+                keterangan
+            ]
+
+            try:
+                worksheet.append_row(row)
+                # refresh cached data
+                load_sheet_df.clear()
+                st.success("Absensi berhasil dicatat dan tersimpan ke Google Spreadsheet ✅")
+            except Exception as e:
+                st.error(f"Gagal menyimpan ke Google Sheets: {e}")
 
 # ---------------------------
-# Visualisasi Grafik Bulanan
+# Rekap Page
 # ---------------------------
-st.subheader("Grafik Keterlambatan Bulanan")
+elif menu == "Rekap":
+    st.title("📑 Rekap Data Absensi")
+    df = load_sheet_df()
 
-df_all = pd.read_sql("SELECT * FROM absensi", conn)
-
-if not df_all.empty:
-    df_all['Bulan'] = pd.to_datetime(df_all['tanggal']).dt.strftime('%B %Y')
-    df_late = df_all[df_all["denda"] > 0]
-
-    if not df_late.empty:
-        chart = df_late.groupby(["Bulan", "nama"]).size().reset_index(name="Terlambat")
-        fig = px.bar(chart, x="nama", y="Terlambat", color="Bulan", barmode="group",
-                     title="Jumlah Keterlambatan Guru per Bulan")
-        st.plotly_chart(fig, use_container_width=True)
+    if df.empty:
+        st.info("Belum ada data absensi.")
     else:
-        st.info("Belum ada yang terlambat bulan ini 😊")
+        # Tampilkan preview
+        st.dataframe(df, height=400)
 
-else:
-    st.info("Belum ada data absensi.")
+        # Filter by Guru / Tanggal
+        st.subheader("Filter")
+        cols = st.columns(3)
+        with cols[0]:
+            guru_filter = st.selectbox("Pilih Guru (Semua jika kosong)", ["Semua"] + guru_list)
+        with cols[1]:
+            date_min = st.date_input("Dari tanggal", value=pd.to_datetime(df['Tanggal']).min() if not df.empty else None)
+        with cols[2]:
+            date_max = st.date_input("Sampai tanggal", value=pd.to_datetime(df['Tanggal']).max() if not df.empty else None)
 
+        # Apply filters
+        df_filtered = df.copy()
+        df_filtered['Tanggal'] = pd.to_datetime(df_filtered['Tanggal'])
+        if guru_filter != "Semua":
+            df_filtered = df_filtered[df_filtered['Nama Guru'] == guru_filter]
+        if date_min is not None:
+            df_filtered = df_filtered[df_filtered['Tanggal'] >= pd.to_datetime(date_min)]
+        if date_max is not None:
+            df_filtered = df_filtered[df_filtered['Tanggal'] <= pd.to_datetime(date_max)]
 
+        st.write(f"Menampilkan {len(df_filtered)} baris.")
+        st.dataframe(df_filtered, height=300)
+
+        # Download CSV
+        csv = df_filtered.to_csv(index=False).encode('utf-8')
+        st.download_button("Download Rekap (CSV)", data=csv, file_name="rekap_absensi.csv", mime="text/csv")
+
+# ---------------------------
+# Grafik Page
+# ---------------------------
+elif menu == "Grafik":
+    st.title("📊 Grafik Absensi Guru")
+    df = load_sheet_df()
+
+    if df.empty:
+        st.info("Belum ada data untuk divisualisasikan.")
+    else:
+        # Prepare data
+        df['Tanggal'] = pd.to_datetime(df['Tanggal'])
+        # Pastikan kolom 'Status' konsisten
+        df['Status'] = df['Status'].astype(str)
+
+        # Chart 1: Kehadiran per Guru (stacked by status)
+        st.subheader("📊 Kehadiran per Guru (berdasarkan Status)")
+        hadir_count = df.groupby(['Nama Guru', 'Status']).size().reset_index(name='Jumlah')
+        fig1 = px.bar(hadir_count, x='Nama Guru', y='Jumlah', color='Status',
+                      title='Jumlah Kehadiran / Status per Guru', barmode='stack')
+        st.plotly_chart(fig1, use_container_width=True)
+
+        # Chart 2: Tren Harian (total absensi per hari)
+        st.subheader("📈 Tren Absensi Harian")
+        harian = df.groupby('Tanggal').size().reset_index(name='Jumlah')
+        fig2 = px.line(harian, x='Tanggal', y='Jumlah', markers=True, title='Jumlah Absensi per Hari')
+        st.plotly_chart(fig2, use_container_width=True)
+
+        # Chart 3: Persentase Status (pie)
+        st.subheader("🥧 Persentase Status Kehadiran")
+        status_persen = df['Status'].value_counts().reset_index()
+        status_persen.columns = ['Status', 'Jumlah']
+        fig3 = px.pie(status_persen, names='Status', values='Jumlah', title='Persentase Status Kehadiran')
+        st.plotly_chart(fig3, use_container_width=True)
+
+        # Optional: show aggregated table per month
+        st.subheader("📋 Rekap Bulanan Keterlambatan")
+        df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
+        terlambat_df = df[df['Denda'].astype(float) > 0] if 'Denda' in df.columns else pd.DataFrame()
+        if not terlambat_df.empty:
+            rekap_bulan = terlambat_df.groupby(['Bulan', 'Nama Guru']).agg(
+                Jumlah_Terlambat=('Denda', 'count'),
+                Total_Denda=('Denda', 'sum')
+            ).reset_index()
+            st.dataframe(rekap_bulan, height=300)
+        else:
+            st.info("Belum ada catatan keterlambatan untuk direkap.")
+
+# ---------------------------
+# End of file
+# ---------------------------
