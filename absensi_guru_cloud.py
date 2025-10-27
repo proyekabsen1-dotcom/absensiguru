@@ -34,7 +34,8 @@ conn.commit()
 # ---------------------------
 SPREADSHEET_URL = st.secrets["SPREADSHEET_URL"]
 
-gc = gspread.oauth(
+gc = gspread.service_account(
+    filename="credentials.json",
     scopes=['https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive']
 )
@@ -145,4 +146,5 @@ if not df_all.empty:
 
 else:
     st.info("Belum ada data absensi.")
+
 
