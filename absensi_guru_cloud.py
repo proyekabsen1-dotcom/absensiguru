@@ -1,7 +1,7 @@
 # ---------------------------
 # ABSENSI PAGE
 # ---------------------------
-if menu == "Absensi":
+if menu = "Absensi":
     now = datetime.now()
     placeholder = st.empty()
     with placeholder.container():
@@ -53,3 +53,4 @@ if menu == "Absensi":
                 .style.applymap(warna_status, subset=["Status"])
                 .format({"Denda": "Rp {:,.0f}"})
             )
+
