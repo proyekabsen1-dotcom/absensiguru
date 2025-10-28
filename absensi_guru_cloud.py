@@ -9,9 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-import threading
-import time as t
-from zoneinfo import ZoneInfo
+import time
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -51,7 +49,7 @@ try:
     worksheet = sh.worksheet(SHEET_TITLE)
 except gspread.exceptions.WorksheetNotFound:
     worksheet = sh.add_worksheet(title=SHEET_TITLE, rows="2000", cols="20")
-    header = ["Tanggal","Waktu","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
+    header = ["Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
     worksheet.append_row(header)
 
 # ---------------------------
@@ -65,7 +63,7 @@ guru_list = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B","Ustadz
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
-    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal","Waktu","Nama Guru","Status","Jam Masuk","Denda","Keterangan"])
+    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"])
 
 def append_absen_row(row):
     worksheet.append_row(row)
@@ -75,6 +73,7 @@ def hitung_denda(nama, jam_masuk, status):
     """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
+    # Guru piket
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
     batas = dt_time(7,0) if nama in piket else dt_time(7,10)
     jam = datetime.strptime(jam_masuk,"%H:%M:%S").time()
@@ -141,49 +140,31 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 # ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
-    tz = ZoneInfo("Asia/Jakarta")
-    placeholder_time = st.empty()
-    placeholder_rekap = st.empty()
+    now = datetime.now()
+    placeholder = st.empty()
+    with placeholder.container():
+        st.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
 
+    st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
         status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
         if submitted:
-            now = datetime.now(tz)
-            tanggal = now.strftime("%Y-%m-%d")
-            waktu = now.strftime("%H:%M:%S")
-            jam_masuk = waktu
+            jam_masuk = datetime.now().strftime("%H:%M:%S")
             denda = hitung_denda(nama_guru, jam_masuk, status_manual)
-            row = [tanggal, waktu, nama_guru, status_manual, jam_masuk, denda, keterangan]
+            row = [datetime.now().strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan]
             append_absen_row(row)
             play_fireworks()
-            st.success(f"🎆 Absen berhasil! Tercatat: {tanggal} {waktu}  Denda: Rp{denda}")
+            st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
 
-    def update_time_and_rekap():
-        while True:
-            now = datetime.now(tz)
-            placeholder_time.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu Sekarang:** {now.strftime('%H:%M:%S')}")
-            
-            df = load_sheet_df()
-            df['Tanggal'] = pd.to_datetime(df['Tanggal'])
-            df_hari_ini = df[df['Tanggal'].dt.date == now.date()]
-            
-            if not df_hari_ini.empty:
-                def highlight_row(row):
-                    if row['Denda'] > 0:
-                        return ['background-color: #f8d7da']*len(row)
-                    elif row['Status'] == 'Hadir':
-                        return ['background-color: #d4edda']*len(row)
-                    else:
-                        return ['background-color: #fff3cd']*len(row)
-
-                placeholder_rekap.dataframe(df_hari_ini.style.apply(highlight_row, axis=1))
-            
-            t.sleep(1)
-
-    threading.Thread(target=update_time_and_rekap, daemon=True).start()
+    # Tampilkan tabel absensi hari ini
+    df = load_sheet_df()
+    hari_ini = df[df['Tanggal'] == datetime.now().strftime("%Y-%m-%d")]
+    if not hari_ini.empty:
+        st.subheader("📋 Absensi Hari Ini")
+        st.dataframe(hari_ini)
 
 # ---------------------------
 # REKAP PAGE
