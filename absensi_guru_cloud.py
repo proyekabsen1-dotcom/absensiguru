@@ -9,7 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-import time
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -20,7 +20,7 @@ SPREADSHEET_URL = st.secrets.get("SPREADSHEET_URL")
 GOOGLE_SERVICE_ACCOUNT = st.secrets.get("GOOGLE_SERVICE_ACCOUNT")
 
 if not SPREADSHEET_URL or not GOOGLE_SERVICE_ACCOUNT:
-    st.error("❌ Secrets belum lengkap. Pastikan SPREADSHEET_URL dan GOOGLE_SERVICE_ACCOUNT sudah diisi di Streamlit Secrets.")
+    st.error("❌ Secrets belum lengkap.")
     st.stop()
 
 # ---------------------------
@@ -70,7 +70,6 @@ def append_absen_row(row):
     load_sheet_df.clear()
 
 def hitung_denda(nama, jam_masuk, status):
-    """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
@@ -79,29 +78,6 @@ def hitung_denda(nama, jam_masuk, status):
     if jam > batas:
         return 2000
     return 0
-
-def create_pdf(df, title):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    elements = []
-    elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
-    elements.append(Spacer(1,12))
-    if df.empty:
-        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
-    else:
-        data = [df.columns.tolist()] + df.astype(str).values.tolist()
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),colors.lightblue),
-            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
-            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
-        ]))
-        elements.append(table)
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
 
 def play_fireworks():
     html = """
@@ -124,6 +100,34 @@ def play_fireworks():
     """
     st.markdown(html, unsafe_allow_html=True)
 
+def create_pdf(df, title):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+    elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
+    elements.append(Spacer(1,12))
+    if df.empty:
+        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
+    else:
+        data = [df.columns.tolist()] + df.astype(str).values.tolist()
+        table = Table(data)
+        style = TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.grey),
+                            ('BACKGROUND',(0,0),(-1,0),colors.lightblue),
+                            ('ALIGN',(0,0),(-1,-1),'CENTER'),
+                            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')])
+        # Highlight denda >0
+        for i, row in enumerate(df.values.tolist(), start=1):
+            if int(row[4]) > 0:
+                style.add('BACKGROUND', (0,i), (-1,i), colors.lightcoral)
+            else:
+                style.add('BACKGROUND', (0,i), (-1,i), colors.lightgreen)
+        table.setStyle(style)
+        elements.append(table)
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
 # ---------------------------
 # HEADER
 # ---------------------------
@@ -139,17 +143,9 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 # ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
-    import streamlit as st
-    import pandas as pd
-    from datetime import datetime
-    import time
-
-    header_placeholder = st.empty()
-    table_placeholder = st.empty()
-    
-    def update_header():
-        now = datetime.now()
-        header_placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
+    st_autorefresh(interval=1000, key="clock")  # update jam real-time
+    now = datetime.now()
+    st.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
 
     st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
@@ -165,82 +161,48 @@ if menu == "Absensi":
             play_fireworks()
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
 
-    # ---------------------------
-    # TAMPILKAN REKAP HARI INI REAL-TIME DENGAN HIGHLIGHT
-    # ---------------------------
-    update_header()
+    st.subheader("📄 Rekap Absensi Hari Ini")
     df = load_sheet_df()
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    hari_ini = df[df['Tanggal'] == today_str]
+    if not df.empty:
+        hari_ini = df[df['Tanggal'] == datetime.now().strftime("%Y-%m-%d")]
+        if hari_ini.empty:
+            st.info("Belum ada guru yang absen hari ini.")
+        else:
+            def highlight_row(row):
+                return ['background-color: lightcoral' if row.Denda>0 else 'background-color: lightgreen']*len(row)
+            st.dataframe(hari_ini.style.apply(highlight_row, axis=1))
 
-    if not hari_ini.empty:
-        # Tabel detail
-        table_placeholder.subheader("📋 Rekapan Kehadiran Hari Ini")
-        styled_table = hari_ini.style.apply(lambda x: ['background-color: lightgreen' if x.name == len(hari_ini)-1 else '' for i in x], axis=1)
-        table_placeholder.dataframe(styled_table)
-
-        # Ringkasan per guru
-        ringkasan = hari_ini.groupby("Nama Guru").agg(
-            Jumlah_Hadir=("Status", lambda x: (x=="Hadir").sum()),
-            Total_Denda=("Denda", "sum")
-        ).reset_index()
-        table_placeholder.subheader("📊 Ringkasan Kehadiran & Denda")
-        table_placeholder.dataframe(ringkasan)
-
-        # ---------------------------
-# HELPERS
 # ---------------------------
-def create_pdf_harian(df_detail, df_ringkasan):
-    # ... kode lengkap seperti yang aku kirim sebelumnya
+# REKAP PAGE
+# ---------------------------
+elif menu == "Rekap":
+    st.header("📑 Rekap Data Absensi Guru")
+    df = load_sheet_df()
+    if df.empty:
+        st.info("Belum ada data absensi.")
+        st.stop()
 
-        
-        # Tombol unduh PDF
-        pdf_buffer = create_pdf_harian(hari_ini, ringkasan)
-        st.download_button("📄 Unduh PDF Rekap Hari Ini", pdf_buffer, "rekap_hari_ini.pdf", "application/pdf")
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'])
+    df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
+    tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-def create_pdf_harian(df_detail, df_ringkasan):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    elements = []
+    # Harian
+    with tab1:
+        harian = df.groupby("Tanggal").size().reset_index(name="Jumlah Kehadiran")
+        st.dataframe(harian)
+        pdf_buffer = create_pdf(harian, "Rekap Harian Absensi Guru")
+        st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
 
-    # Judul
-    elements.append(Paragraph("<b>Rekap Absensi Hari Ini</b>", styles['Title']))
-    elements.append(Spacer(1,12))
+    # Bulanan
+    with tab2:
+        bulanan = df.groupby("Bulan").size().reset_index(name="Jumlah Kehadiran")
+        st.dataframe(bulanan)
+        pdf_buffer = create_pdf(bulanan, "Rekap Bulanan Absensi Guru")
+        st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, "rekap_bulanan.pdf", "application/pdf")
 
-    # Tabel Detail
-    elements.append(Paragraph("<b>📋 Detail Kehadiran</b>", styles['Heading2']))
-    if df_detail.empty:
-        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
-    else:
-        data = [df_detail.columns.tolist()] + df_detail.astype(str).values.tolist()
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),colors.lightblue),
-            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
-            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
-        ]))
-        elements.append(table)
-    elements.append(Spacer(1,12))
-
-    # Tabel Ringkasan
-    elements.append(Paragraph("<b>📊 Ringkasan Per Guru</b>", styles['Heading2']))
-    if df_ringkasan.empty:
-        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
-    else:
-        data_sum = [df_ringkasan.columns.tolist()] + df_ringkasan.astype(str).values.tolist()
-        table_sum = Table(data_sum)
-        table_sum.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),colors.lightgreen),
-            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
-            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
-        ]))
-        elements.append(table_sum)
-
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-
+    # Per Guru
+    with tab3:
+        per_guru = df.groupby("Nama Guru").size().reset_index(name="Jumlah Kehadiran")
+        st.dataframe(per_guru)
+        pdf_buffer = create_pdf(per_guru, "Rekap Per Guru Absensi")
+        st.download_button("📄 Unduh PDF Rekap Per Guru", pdf_buffer, "rekap_per_guru.pdf", "application/pdf")
