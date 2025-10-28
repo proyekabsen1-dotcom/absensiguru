@@ -23,9 +23,20 @@ if SPREADSHEET_URL is None or GOOGLE_SERVICE_ACCOUNT is None:
 # Auth ke Google Sheets
 # ---------------------------
 try:
-    credentials_dict = json.loads(GOOGLE_SERVICE_ACCOUNT)
+    # Jika secrets berupa string multi-line, ubah jadi dict
+    if isinstance(GOOGLE_SERVICE_ACCOUNT, str):
+        credentials_dict = json.loads(GOOGLE_SERVICE_ACCOUNT)
+    else:
+        credentials_dict = GOOGLE_SERVICE_ACCOUNT
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scopes)
+    gc = gspread.authorize(creds)
 except Exception as e:
-    st.error("Gagal membaca GOOGLE_SERVICE_ACCOUNT dari secrets. Pastikan format JSON benar.")
+    st.error(f"Gagal membaca GOOGLE_SERVICE_ACCOUNT dari secrets. Pastikan format JSON benar.\n\nDetail error: {e}")
     st.stop()
 
 scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -212,3 +223,4 @@ elif menu == "Grafik":
 # ---------------------------
 # End of file
 # ---------------------------
+
