@@ -9,7 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from streamlit_autorefresh import st_autorefresh
+import time
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -20,7 +20,7 @@ SPREADSHEET_URL = st.secrets.get("SPREADSHEET_URL")
 GOOGLE_SERVICE_ACCOUNT = st.secrets.get("GOOGLE_SERVICE_ACCOUNT")
 
 if not SPREADSHEET_URL or not GOOGLE_SERVICE_ACCOUNT:
-    st.error("❌ Secrets belum lengkap.")
+    st.error("❌ Secrets belum lengkap. Pastikan SPREADSHEET_URL dan GOOGLE_SERVICE_ACCOUNT sudah diisi di Streamlit Secrets.")
     st.stop()
 
 # ---------------------------
@@ -79,6 +79,29 @@ def hitung_denda(nama, jam_masuk, status):
         return 2000
     return 0
 
+def create_pdf(df, title):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+    elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
+    elements.append(Spacer(1,12))
+    if df.empty:
+        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
+    else:
+        data = [df.columns.tolist()] + df.astype(str).values.tolist()
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.lightblue),
+            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
+            ('ALIGN',(0,0),(-1,-1),'CENTER'),
+            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
+        ]))
+        elements.append(table)
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
 def play_fireworks():
     html = """
     <div style='position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none;'>
@@ -100,34 +123,6 @@ def play_fireworks():
     """
     st.markdown(html, unsafe_allow_html=True)
 
-def create_pdf(df, title):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    elements = []
-    elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
-    elements.append(Spacer(1,12))
-    if df.empty:
-        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
-    else:
-        data = [df.columns.tolist()] + df.astype(str).values.tolist()
-        table = Table(data)
-        style = TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.grey),
-                            ('BACKGROUND',(0,0),(-1,0),colors.lightblue),
-                            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-                            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')])
-        # Highlight denda >0
-        for i, row in enumerate(df.values.tolist(), start=1):
-            if int(row[4]) > 0:
-                style.add('BACKGROUND', (0,i), (-1,i), colors.lightcoral)
-            else:
-                style.add('BACKGROUND', (0,i), (-1,i), colors.lightgreen)
-        table.setStyle(style)
-        elements.append(table)
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
 # ---------------------------
 # HEADER
 # ---------------------------
@@ -143,9 +138,14 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 # ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
-    st_autorefresh(interval=1000, key="clock")  # update jam real-time
-    now = datetime.now()
-    st.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
+    placeholder = st.empty()
+
+    # Loop real-time update jam
+    def show_time():
+        now = datetime.now()
+        placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
+
+    show_time()
 
     st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
@@ -161,16 +161,14 @@ if menu == "Absensi":
             play_fireworks()
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
 
-    st.subheader("📄 Rekap Absensi Hari Ini")
-    df = load_sheet_df()
-    if not df.empty:
-        hari_ini = df[df['Tanggal'] == datetime.now().strftime("%Y-%m-%d")]
-        if hari_ini.empty:
-            st.info("Belum ada guru yang absen hari ini.")
-        else:
-            def highlight_row(row):
-                return ['background-color: lightcoral' if row.Denda>0 else 'background-color: lightgreen']*len(row)
-            st.dataframe(hari_ini.style.apply(highlight_row, axis=1))
+    # ---------------------------
+    # Rekapan Absensi Terakhir
+    df_absen = load_sheet_df()
+    if not df_absen.empty:
+        st.subheader("📋 Rekapan Kehadiran Hari Ini")
+        hari_ini = datetime.now().strftime("%Y-%m-%d")
+        df_hari_ini = df_absen[df_absen['Tanggal']==hari_ini][["Nama Guru","Status","Jam Masuk","Denda","Keterangan"]]
+        st.dataframe(df_hari_ini)
 
 # ---------------------------
 # REKAP PAGE
@@ -186,23 +184,23 @@ elif menu == "Rekap":
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # Harian
+    # Rekap Harian
     with tab1:
         harian = df.groupby("Tanggal").size().reset_index(name="Jumlah Kehadiran")
         st.dataframe(harian)
         pdf_buffer = create_pdf(harian, "Rekap Harian Absensi Guru")
         st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
 
-    # Bulanan
+    # Rekap Bulanan
     with tab2:
         bulanan = df.groupby("Bulan").size().reset_index(name="Jumlah Kehadiran")
         st.dataframe(bulanan)
         pdf_buffer = create_pdf(bulanan, "Rekap Bulanan Absensi Guru")
         st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, "rekap_bulanan.pdf", "application/pdf")
 
-    # Per Guru
+    # Rekap Per Guru
     with tab3:
         per_guru = df.groupby("Nama Guru").size().reset_index(name="Jumlah Kehadiran")
         st.dataframe(per_guru)
-        pdf_buffer = create_pdf(per_guru, "Rekap Per Guru Absensi")
-        st.download_button("📄 Unduh PDF Rekap Per Guru", pdf_buffer, "rekap_per_guru.pdf", "application/pdf")
+        pdf_buffer = create_pdf(per_guru, "Rekap Absensi Per Guru")
+        st.download_button("📄 Unduh PDF Per Guru", pdf_buffer, "rekap_per_guru.pdf", "application/pdf")
