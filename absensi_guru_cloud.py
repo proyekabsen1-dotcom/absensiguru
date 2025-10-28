@@ -1,6 +1,6 @@
 # absensi_guru_cloud.py
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, date, time as dt_time
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -10,7 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-import base64
+import threading
 import time
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
@@ -58,7 +58,7 @@ try:
     worksheet = sh.worksheet(SHEET_TITLE)
 except gspread.exceptions.WorksheetNotFound:
     worksheet = sh.add_worksheet(title=SHEET_TITLE, rows="2000", cols="20")
-    header = ["Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan"]
+    header = ["Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan", "Tipe Guru"]
     worksheet.append_row(header)
 
 # ---------------------------
@@ -72,7 +72,7 @@ guru_list = ["Yolan", "Husnia", "Rima", "Rifa", "Sela", "Ustadz A", "Ustadz B", 
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
-    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan"])
+    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan", "Tipe Guru"])
 
 def append_absen_row(row):
     worksheet.append_row(row)
@@ -86,24 +86,39 @@ def create_pdf(df, title):
 
     elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
     elements.append(Spacer(1, 12))
+
     if df.empty:
         elements.append(Paragraph("Tidak ada data.", styles['Normal']))
     else:
         data = [df.columns.tolist()] + df.astype(str).values.tolist()
         table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.lightblue),
+
+        style = TableStyle([
             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
-        ]))
+        ])
+        style.add('BACKGROUND', (0,0), (-1,0), colors.lightblue)
+
+        for i, row in enumerate(data[1:], start=1):
+            status = row[df.columns.get_loc('Status')]
+            denda = float(row[df.columns.get_loc('Denda')])
+            if status.lower() == 'hadir' and denda == 0:
+                bg = colors.lightgreen
+            elif status.lower() == 'hadir' and denda > 0:
+                bg = colors.yellow
+            else:
+                bg = colors.salmon
+            style.add('BACKGROUND', (0,i), (-1,i), bg)
+
+        table.setStyle(style)
         elements.append(table)
+
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
 def play_fireworks():
-    """Efek kembang api setelah absen"""
     fireworks_html = """
     <div style='position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none;'>
         <canvas id='fireworks'></canvas>
@@ -145,10 +160,18 @@ def play_fireworks():
     """
     st.markdown(fireworks_html, unsafe_allow_html=True)
 
+def color_status(val_status, val_denda):
+    if val_status.lower() == 'hadir' and val_denda == 0:
+        return 'background-color: lightgreen'
+    elif val_status.lower() == 'hadir' and val_denda > 0:
+        return 'background-color: yellow'
+    else:
+        return 'background-color: salmon'
+
 # ---------------------------
-# HEADER (dengan logo)
+# HEADER
 # ---------------------------
-logo_url = "https://upload.wikimedia.org/wikipedia/commons/4/4a/Logo_Pendidikan_Indonesia.png"  # ganti dengan logo sekolah kamu
+logo_url = "https://upload.wikimedia.org/wikipedia/commons/4/4a/Logo_Pendidikan_Indonesia.png"
 st.image(logo_url, width=90)
 st.title("📘 Absensi Guru SD Tahfidz BKQ")
 
@@ -161,32 +184,48 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi", "Rekap"])
 # ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
-    now = datetime.now()
+    jam_placeholder = st.empty()
 
-    placeholder = st.empty()
-    with placeholder.container():
-        st.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
+    def update_jam_real_time():
+        while True:
+            now_local = datetime.now()
+            jam_placeholder.markdown(
+                f"**Tanggal:** {now_local.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now_local.strftime('%H:%M:%S')}"
+            )
+            time.sleep(1)
 
-    st.subheader("Input Absensi (otomatis 'Hadir')")
+    threading.Thread(target=update_jam_real_time, daemon=True).start()
+
+    st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
+        tipe_guru = st.selectbox("Tipe Guru", ["Reguler", "Piket"])
         status_manual = st.selectbox("Status", ["Hadir", "Izin", "Cuti", "Tidak Hadir"])
         keterangan = st.text_input("Keterangan (opsional)", "")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
 
         if submitted:
             jam_masuk = datetime.now().strftime("%H:%M:%S")
-            denda = 0
-            row = [datetime.now().strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan]
-            append_absen_row(row)
-            play_fireworks()
-            st.success("🎆 Absen hari ini berhasil!")
+            df_today = load_sheet_df()
+            df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal']).dt.date
+            if any((df_today['Nama Guru'] == nama_guru) & (df_today['Tanggal'] == datetime.now().date())):
+                st.warning(f"⚠️ {nama_guru} sudah absen hari ini.")
+            else:
+                # Aturan denda
+                if status_manual.lower() == 'hadir':
+                    if tipe_guru == "Reguler":
+                        batas = dt_time(7,10)
+                    else:  # Piket
+                        batas = dt_time(7,0)
+                    masuk_time = datetime.strptime(jam_masuk, "%H:%M:%S").time()
+                    denda = 2000 if masuk_time > batas else 0
+                else:
+                    denda = 4000
 
-    # Update jam real-time
-    for _ in range(10):
-        now = datetime.now()
-        placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
-        time.sleep(1)
+                row = [datetime.now().strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan, tipe_guru]
+                append_absen_row(row)
+                play_fireworks()
+                st.success(f"🎆 Absen hari ini berhasil! Denda: Rp{denda}")
 
 # ---------------------------
 # REKAP PAGE
@@ -216,10 +255,17 @@ elif menu == "Rekap":
         pdf_buffer = create_pdf(bulanan, "Rekap Bulanan Semua Guru")
         st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, "rekap_bulanan.pdf", "application/pdf")
 
-    # Rekap Per Guru
+    # Rekap Per Guru dengan tabel berwarna
     with tab3:
         guru_pilih = st.selectbox("Pilih Guru", guru_list)
         dfg = df[df['Nama Guru'] == guru_pilih]
-        st.dataframe(dfg)
+        if not dfg.empty:
+            styled_df = dfg.style.apply(
+                lambda x: [color_status(x['Status'], float(x['Denda']))]*len(x), axis=1
+            )
+            st.dataframe(styled_df)
+        else:
+            st.info("Belum ada data untuk guru ini.")
+
         pdf_buffer = create_pdf(dfg, f"Rekap {guru_pilih}")
         st.download_button(f"📄 Unduh PDF {guru_pilih}", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
