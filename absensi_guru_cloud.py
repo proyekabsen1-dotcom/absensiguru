@@ -5,12 +5,13 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
-import plotly.express as px
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+import base64
+import time
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -21,7 +22,7 @@ SPREADSHEET_URL = st.secrets.get("SPREADSHEET_URL", None)
 GOOGLE_SERVICE_ACCOUNT = st.secrets.get("GOOGLE_SERVICE_ACCOUNT", None)
 
 if SPREADSHEET_URL is None or GOOGLE_SERVICE_ACCOUNT is None:
-    st.error("Secrets belum lengkap. Pastikan SPREADSHEET_URL dan GOOGLE_SERVICE_ACCOUNT sudah diisi di Streamlit Secrets.")
+    st.error("❌ Secrets belum lengkap. Pastikan SPREADSHEET_URL dan GOOGLE_SERVICE_ACCOUNT sudah diisi di Streamlit Secrets.")
     st.stop()
 
 # ---------------------------
@@ -40,16 +41,16 @@ try:
     creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scopes)
     gc = gspread.authorize(creds)
 except Exception as e:
-    st.error(f"Gagal membaca GOOGLE_SERVICE_ACCOUNT dari secrets. Pastikan format JSON benar.\n\nDetail error: {e}")
+    st.error(f"Gagal membaca GOOGLE_SERVICE_ACCOUNT dari secrets.\n\nDetail error: {e}")
     st.stop()
 
 # ---------------------------
-# BUKA SPREADSHEET & WORKSHEET
+# BUKA SPREADSHEET
 # ---------------------------
 try:
     sh = gc.open_by_url(SPREADSHEET_URL)
 except Exception as e:
-    st.error("Gagal membuka spreadsheet. Periksa SPREADSHEET_URL dan permission service account.")
+    st.error(f"Gagal membuka spreadsheet. Pastikan URL benar dan akun service memiliki akses.\n\nDetail: {e}")
     st.stop()
 
 SHEET_TITLE = "Absensi"
@@ -57,7 +58,7 @@ try:
     worksheet = sh.worksheet(SHEET_TITLE)
 except gspread.exceptions.WorksheetNotFound:
     worksheet = sh.add_worksheet(title=SHEET_TITLE, rows="2000", cols="20")
-    header = ["Tanggal","Nama Guru","Status","Jam Masuk","Jam Pulang","Denda","Keterangan"]
+    header = ["Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan"]
     worksheet.append_row(header)
 
 # ---------------------------
@@ -71,10 +72,13 @@ guru_list = ["Yolan", "Husnia", "Rima", "Rifa", "Sela", "Ustadz A", "Ustadz B", 
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
-    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal","Nama Guru","Status","Jam Masuk","Jam Pulang","Denda","Keterangan"])
+    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan"])
+
+def append_absen_row(row):
+    worksheet.append_row(row)
+    load_sheet_df.clear()
 
 def create_pdf(df, title):
-    """Membuat file PDF dari DataFrame"""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -98,53 +102,97 @@ def create_pdf(df, title):
     buffer.seek(0)
     return buffer
 
-def play_ding():
-    sound_data = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA"
-    st.markdown(f"""<audio autoplay><source src="{sound_data}" type="audio/mp3"></audio>""", unsafe_allow_html=True)
+def play_fireworks():
+    """Efek kembang api setelah absen"""
+    fireworks_html = """
+    <div style='position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none;'>
+        <canvas id='fireworks'></canvas>
+    </div>
+    <script>
+    const canvas=document.getElementById('fireworks');
+    const ctx=canvas.getContext('2d');
+    canvas.width=window.innerWidth;
+    canvas.height=window.innerHeight;
+    const fireworks=[];
+    function random(min,max){return Math.random()*(max-min)+min;}
+    function Firework(x,y){
+        this.x=x;this.y=y;
+        this.color=`hsl(${Math.floor(Math.random()*360)},100%,60%)`;
+        this.radius=random(2,4);
+        this.alpha=1;
+        this.vx=random(-5,5);
+        this.vy=random(-5,5);
+    }
+    Firework.prototype.update=function(){
+        this.x+=this.vx;this.y+=this.vy;this.alpha-=0.02;
+    }
+    function animate(){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        for(let i=0;i<fireworks.length;i++){
+            const f=fireworks[i];
+            ctx.beginPath();
+            ctx.arc(f.x,f.y,f.radius,0,2*Math.PI);
+            ctx.fillStyle=f.color;
+            ctx.globalAlpha=f.alpha;
+            ctx.fill();
+            f.update();
+        }
+        requestAnimationFrame(animate);
+    }
+    for(let i=0;i<100;i++){fireworks.push(new Firework(window.innerWidth/2,window.innerHeight/2));}
+    animate();
+    </script>
+    """
+    st.markdown(fireworks_html, unsafe_allow_html=True)
 
-def append_absen_row(row):
-    worksheet.append_row(row)
-    load_sheet_df.clear()
+# ---------------------------
+# HEADER (dengan logo)
+# ---------------------------
+logo_url = "https://upload.wikimedia.org/wikipedia/commons/4/4a/Logo_Pendidikan_Indonesia.png"  # ganti dengan logo sekolah kamu
+st.image(logo_url, width=90)
+st.title("📘 Absensi Guru SD Tahfidz BKQ")
 
 # ---------------------------
 # MENU
 # ---------------------------
-menu = st.sidebar.radio("📌 Menu", ["Absensi", "Rekap"])
+menu = st.sidebar.radio("📋 Menu", ["Absensi", "Rekap"])
 
 # ---------------------------
 # ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
-    st.title("📌 Absensi Guru SD Tahfidz BKQ")
     now = datetime.now()
-    st.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')} — **Jam:** {now.strftime('%H:%M:%S')}")
 
-    st.subheader("Input Absensi (otomatis 'Hadir' ketika klik tombol)")
+    placeholder = st.empty()
+    with placeholder.container():
+        st.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
+
+    st.subheader("Input Absensi (otomatis 'Hadir')")
     with st.form("form_absen", clear_on_submit=True):
-        col1, col2 = st.columns([2,2])
-        with col1:
-            nama_guru = st.selectbox("Nama Guru", guru_list)
-        with col2:
-            status_manual = st.selectbox("Ubah status (opsional)", ["Otomatis Hadir", "Izin", "Cuti", "Tidak Hadir"])
-        jam_masuk_auto = now.strftime("%H:%M:%S")
-        jam_pulang = st.text_input("Jam Pulang (HH:MM)", value="")
-        keterangan = st.text_input("Keterangan", value="")
-
+        nama_guru = st.selectbox("Nama Guru", guru_list)
+        status_manual = st.selectbox("Status", ["Hadir", "Izin", "Cuti", "Tidak Hadir"])
+        keterangan = st.text_input("Keterangan (opsional)", "")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
+
         if submitted:
-            status_to_save = "Hadir" if status_manual == "Otomatis Hadir" else status_manual
-            denda = 2000 if status_to_save.lower().startswith("telat") else 0
-            row = [now.strftime("%Y-%m-%d"), nama_guru, status_to_save, jam_masuk_auto if status_to_save=="Hadir" else "", jam_pulang, denda, keterangan]
+            jam_masuk = datetime.now().strftime("%H:%M:%S")
+            denda = 0
+            row = [datetime.now().strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan]
             append_absen_row(row)
-            play_ding()
-            st.success(f"✅ {nama_guru} berhasil absen sebagai '{status_to_save}'")
-            st.balloons()
+            play_fireworks()
+            st.success("🎆 Absen hari ini berhasil!")
+
+    # Update jam real-time
+    for _ in range(10):
+        now = datetime.now()
+        placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
+        time.sleep(1)
 
 # ---------------------------
 # REKAP PAGE
 # ---------------------------
 elif menu == "Rekap":
-    st.title("📑 Rekap Data Absensi Guru")
+    st.header("📑 Rekap Data Absensi Guru")
     df = load_sheet_df()
     if df.empty:
         st.info("Belum ada data absensi.")
@@ -152,38 +200,26 @@ elif menu == "Rekap":
 
     df['Tanggal'] = pd.to_datetime(df['Tanggal'])
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
-    tab1, tab2, tab3 = st.tabs(["📅 Rekap Harian", "📆 Rekap Bulanan Semua", "👤 Rekap per Guru"])
+    tab1, tab2, tab3 = st.tabs(["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
 
-    # 1️⃣ Rekap Harian
+    # Rekap Harian
     with tab1:
         harian = df.groupby("Tanggal").size().reset_index(name="Jumlah Kehadiran")
-        st.subheader("Rekap Harian")
         st.dataframe(harian)
         pdf_buffer = create_pdf(harian, "Rekap Harian Absensi Guru")
         st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
 
-    # 2️⃣ Rekap Bulanan
+    # Rekap Bulanan
     with tab2:
-        bulanan = df.groupby(['Bulan','Nama Guru']).agg(
-            Jumlah_Hadir=('Nama Guru','count'),
-            Total_Denda=('Denda','sum')
-        ).reset_index()
-        st.subheader("Rekap Bulanan Semua Guru")
+        bulanan = df.groupby(['Bulan', 'Nama Guru']).agg(Jumlah_Hadir=('Nama Guru', 'count')).reset_index()
         st.dataframe(bulanan)
         pdf_buffer = create_pdf(bulanan, "Rekap Bulanan Semua Guru")
         st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, "rekap_bulanan.pdf", "application/pdf")
 
-    # 3️⃣ Rekap per Guru
+    # Rekap Per Guru
     with tab3:
         guru_pilih = st.selectbox("Pilih Guru", guru_list)
-        periode_mulai = st.date_input("Mulai", value=datetime.now().replace(day=1))
-        periode_akhir = st.date_input("Akhir", value=datetime.now())
-        dfg = df[(df['Nama Guru'] == guru_pilih) &
-                 (df['Tanggal'].dt.date >= periode_mulai) &
-                 (df['Tanggal'].dt.date <= periode_akhir)]
-        if dfg.empty:
-            st.info("Tidak ada data.")
-        else:
-            st.dataframe(dfg)
-            pdf_buffer = create_pdf(dfg, f"Rekap {guru_pilih} ({periode_mulai} - {periode_akhir})")
-            st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
+        dfg = df[df['Nama Guru'] == guru_pilih]
+        st.dataframe(dfg)
+        pdf_buffer = create_pdf(dfg, f"Rekap {guru_pilih}")
+        st.download_button(f"📄 Unduh PDF {guru_pilih}", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
