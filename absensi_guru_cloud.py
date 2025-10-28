@@ -187,6 +187,13 @@ if menu == "Absensi":
         table_placeholder.subheader("📊 Ringkasan Kehadiran & Denda")
         table_placeholder.dataframe(ringkasan)
 
+        # ---------------------------
+# HELPERS
+# ---------------------------
+def create_pdf_harian(df_detail, df_ringkasan):
+    # ... kode lengkap seperti yang aku kirim sebelumnya
+
+        
         # Tombol unduh PDF
         pdf_buffer = create_pdf_harian(hari_ini, ringkasan)
         st.download_button("📄 Unduh PDF Rekap Hari Ini", pdf_buffer, "rekap_hari_ini.pdf", "application/pdf")
@@ -235,4 +242,5 @@ def create_pdf_harian(df_detail, df_ringkasan):
     doc.build(elements)
     buffer.seek(0)
     return buffer
+
 
