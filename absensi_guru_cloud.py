@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime, time as dt_time
+from zoneinfo import ZoneInfo
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -9,7 +10,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-import time
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -102,27 +102,6 @@ def create_pdf(df, title):
     buffer.seek(0)
     return buffer
 
-def play_fireworks():
-    html = """
-    <div style='position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none;'>
-        <canvas id='fireworks'></canvas>
-    </div>
-    <script>
-    const canvas=document.getElementById('fireworks');
-    const ctx=canvas.getContext('2d');
-    canvas.width=window.innerWidth;
-    canvas.height=window.innerHeight;
-    const fireworks=[];
-    function random(min,max){return Math.random()*(max-min)+min;}
-    function Firework(x,y){this.x=x;this.y=y;this.color=`hsl(${Math.floor(Math.random()*360)},100%,60%)`;this.radius=random(2,4);this.alpha=1;this.vx=random(-5,5);this.vy=random(-5,5);}
-    Firework.prototype.update=function(){this.x+=this.vx;this.y+=this.vy;this.alpha-=0.02;}
-    function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);for(let i=0;i<fireworks.length;i++){const f=fireworks[i];ctx.beginPath();ctx.arc(f.x,f.y,f.radius,0,2*Math.PI);ctx.fillStyle=f.color;ctx.globalAlpha=f.alpha;ctx.fill();f.update();}requestAnimationFrame(animate);}
-    for(let i=0;i<100;i++){fireworks.push(new Firework(window.innerWidth/2,window.innerHeight/2));}
-    animate();
-    </script>
-    """
-    st.markdown(html, unsafe_allow_html=True)
-
 # ---------------------------
 # HEADER
 # ---------------------------
@@ -135,40 +114,42 @@ st.title("📘 Absensi Guru SD Tahfidz BKQ")
 menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 
 # ---------------------------
-# ABSENSI PAGE
+# ABSENSI PAGE REAL-TIME
 # ---------------------------
 if menu == "Absensi":
-    placeholder = st.empty()
+    tz = ZoneInfo("Asia/Jakarta")
+    placeholder_time = st.empty()
+    placeholder_rekap = st.empty()
 
-    # Loop real-time update jam
-    def show_time():
-        now = datetime.now()
-        placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
-
-    show_time()
-
-    st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
         status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
         if submitted:
-            jam_masuk = datetime.now().strftime("%H:%M:%S")
+            jam_masuk = datetime.now(tz).strftime("%H:%M:%S")
             denda = hitung_denda(nama_guru, jam_masuk, status_manual)
-            row = [datetime.now().strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan]
+            row = [datetime.now(tz).strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan]
             append_absen_row(row)
-            play_fireworks()
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
 
-    # ---------------------------
-    # Rekapan Absensi Terakhir
-    df_absen = load_sheet_df()
-    if not df_absen.empty:
-        st.subheader("📋 Rekapan Kehadiran Hari Ini")
-        hari_ini = datetime.now().strftime("%Y-%m-%d")
-        df_hari_ini = df_absen[df_absen['Tanggal']==hari_ini][["Nama Guru","Status","Jam Masuk","Denda","Keterangan"]]
-        st.dataframe(df_hari_ini)
+    # Loop real-time update
+    import threading
+    import time as t
+
+    def update_time_and_rekap():
+        while True:
+            now = datetime.now(tz)
+            placeholder_time.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
+            # Rekapan kehadiran hari ini
+            df = load_sheet_df()
+            df['Tanggal'] = pd.to_datetime(df['Tanggal'])
+            df_hari_ini = df[df['Tanggal'].dt.date == now.date()]
+            if not df_hari_ini.empty:
+                placeholder_rekap.dataframe(df_hari_ini[["Nama Guru","Status","Jam Masuk","Denda","Keterangan"]])
+            t.sleep(1)
+
+    threading.Thread(target=update_time_and_rekap, daemon=True).start()
 
 # ---------------------------
 # REKAP PAGE
@@ -184,23 +165,8 @@ elif menu == "Rekap":
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # Rekap Harian
     with tab1:
         harian = df.groupby("Tanggal").size().reset_index(name="Jumlah Kehadiran")
         st.dataframe(harian)
         pdf_buffer = create_pdf(harian, "Rekap Harian Absensi Guru")
         st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
-
-    # Rekap Bulanan
-    with tab2:
-        bulanan = df.groupby("Bulan").size().reset_index(name="Jumlah Kehadiran")
-        st.dataframe(bulanan)
-        pdf_buffer = create_pdf(bulanan, "Rekap Bulanan Absensi Guru")
-        st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, "rekap_bulanan.pdf", "application/pdf")
-
-    # Rekap Per Guru
-    with tab3:
-        per_guru = df.groupby("Nama Guru").size().reset_index(name="Jumlah Kehadiran")
-        st.dataframe(per_guru)
-        pdf_buffer = create_pdf(per_guru, "Rekap Absensi Per Guru")
-        st.download_button("📄 Unduh PDF Per Guru", pdf_buffer, "rekap_per_guru.pdf", "application/pdf")
