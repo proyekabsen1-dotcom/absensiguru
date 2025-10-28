@@ -1,6 +1,5 @@
 import streamlit as st
 from datetime import datetime, time as dt_time
-from zoneinfo import ZoneInfo
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -10,6 +9,9 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+import threading
+import time as t
+from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -49,7 +51,7 @@ try:
     worksheet = sh.worksheet(SHEET_TITLE)
 except gspread.exceptions.WorksheetNotFound:
     worksheet = sh.add_worksheet(title=SHEET_TITLE, rows="2000", cols="20")
-    header = ["Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
+    header = ["Tanggal","Waktu","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
     worksheet.append_row(header)
 
 # ---------------------------
@@ -63,13 +65,14 @@ guru_list = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B","Ustadz
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
-    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"])
+    return pd.DataFrame(records) if records else pd.DataFrame(columns=["Tanggal","Waktu","Nama Guru","Status","Jam Masuk","Denda","Keterangan"])
 
 def append_absen_row(row):
     worksheet.append_row(row)
     load_sheet_df.clear()
 
 def hitung_denda(nama, jam_masuk, status):
+    """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
@@ -102,6 +105,27 @@ def create_pdf(df, title):
     buffer.seek(0)
     return buffer
 
+def play_fireworks():
+    html = """
+    <div style='position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none;'>
+        <canvas id='fireworks'></canvas>
+    </div>
+    <script>
+    const canvas=document.getElementById('fireworks');
+    const ctx=canvas.getContext('2d');
+    canvas.width=window.innerWidth;
+    canvas.height=window.innerHeight;
+    const fireworks=[];
+    function random(min,max){return Math.random()*(max-min)+min;}
+    function Firework(x,y){this.x=x;this.y=y;this.color=`hsl(${Math.floor(Math.random()*360)},100%,60%)`;this.radius=random(2,4);this.alpha=1;this.vx=random(-5,5);this.vy=random(-5,5);}
+    Firework.prototype.update=function(){this.x+=this.vx;this.y+=this.vy;this.alpha-=0.02;}
+    function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);for(let i=0;i<fireworks.length;i++){const f=fireworks[i];ctx.beginPath();ctx.arc(f.x,f.y,f.radius,0,2*Math.PI);ctx.fillStyle=f.color;ctx.globalAlpha=f.alpha;ctx.fill();f.update();}requestAnimationFrame(animate);}
+    for(let i=0;i<100;i++){fireworks.push(new Firework(window.innerWidth/2,window.innerHeight/2));}
+    animate();
+    </script>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
 # ---------------------------
 # HEADER
 # ---------------------------
@@ -114,7 +138,7 @@ st.title("📘 Absensi Guru SD Tahfidz BKQ")
 menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 
 # ---------------------------
-# ABSENSI PAGE REAL-TIME
+# ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
     tz = ZoneInfo("Asia/Jakarta")
@@ -127,26 +151,36 @@ if menu == "Absensi":
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
         if submitted:
-            jam_masuk = datetime.now(tz).strftime("%H:%M:%S")
+            now = datetime.now(tz)
+            tanggal = now.strftime("%Y-%m-%d")
+            waktu = now.strftime("%H:%M:%S")
+            jam_masuk = waktu
             denda = hitung_denda(nama_guru, jam_masuk, status_manual)
-            row = [datetime.now(tz).strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan]
+            row = [tanggal, waktu, nama_guru, status_manual, jam_masuk, denda, keterangan]
             append_absen_row(row)
-            st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
-
-    # Loop real-time update
-    import threading
-    import time as t
+            play_fireworks()
+            st.success(f"🎆 Absen berhasil! Tercatat: {tanggal} {waktu}  Denda: Rp{denda}")
 
     def update_time_and_rekap():
         while True:
             now = datetime.now(tz)
-            placeholder_time.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu:** {now.strftime('%H:%M:%S')}")
-            # Rekapan kehadiran hari ini
+            placeholder_time.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu Sekarang:** {now.strftime('%H:%M:%S')}")
+            
             df = load_sheet_df()
             df['Tanggal'] = pd.to_datetime(df['Tanggal'])
             df_hari_ini = df[df['Tanggal'].dt.date == now.date()]
+            
             if not df_hari_ini.empty:
-                placeholder_rekap.dataframe(df_hari_ini[["Nama Guru","Status","Jam Masuk","Denda","Keterangan"]])
+                def highlight_row(row):
+                    if row['Denda'] > 0:
+                        return ['background-color: #f8d7da']*len(row)
+                    elif row['Status'] == 'Hadir':
+                        return ['background-color: #d4edda']*len(row)
+                    else:
+                        return ['background-color: #fff3cd']*len(row)
+
+                placeholder_rekap.dataframe(df_hari_ini.style.apply(highlight_row, axis=1))
+            
             t.sleep(1)
 
     threading.Thread(target=update_time_and_rekap, daemon=True).start()
@@ -165,6 +199,7 @@ elif menu == "Rekap":
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
+    # Rekap Harian
     with tab1:
         harian = df.groupby("Tanggal").size().reset_index(name="Jumlah Kehadiran")
         st.dataframe(harian)
