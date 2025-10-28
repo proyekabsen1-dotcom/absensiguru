@@ -1,7 +1,16 @@
+
+st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
+
+# HEADER
+st.image("https://upload.wikimedia.org/wikipedia/commons/4/4a/Logo_Pendidikan_Indonesia.png", width=90)
+st.title("📘 Absensi Guru SD Tahfidz BKQ")
+
+# MENU
+menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 # ---------------------------
 # ABSENSI PAGE
 # ---------------------------
-if menu = "Absensi":
+if menu == "Absensi":
     now = datetime.now()
     placeholder = st.empty()
     with placeholder.container():
@@ -53,4 +62,5 @@ if menu = "Absensi":
                 .style.applymap(warna_status, subset=["Status"])
                 .format({"Denda": "Rp {:,.0f}"})
             )
+
 
