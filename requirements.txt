@@ -4,5 +4,8 @@ fpdf
 gspread
 oauth2client
 plotly
+reportlab
+
+
 
 
