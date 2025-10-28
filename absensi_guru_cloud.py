@@ -191,3 +191,48 @@ if menu == "Absensi":
         pdf_buffer = create_pdf_harian(hari_ini, ringkasan)
         st.download_button("📄 Unduh PDF Rekap Hari Ini", pdf_buffer, "rekap_hari_ini.pdf", "application/pdf")
 
+def create_pdf_harian(df_detail, df_ringkasan):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Judul
+    elements.append(Paragraph("<b>Rekap Absensi Hari Ini</b>", styles['Title']))
+    elements.append(Spacer(1,12))
+
+    # Tabel Detail
+    elements.append(Paragraph("<b>📋 Detail Kehadiran</b>", styles['Heading2']))
+    if df_detail.empty:
+        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
+    else:
+        data = [df_detail.columns.tolist()] + df_detail.astype(str).values.tolist()
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.lightblue),
+            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
+            ('ALIGN',(0,0),(-1,-1),'CENTER'),
+            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
+        ]))
+        elements.append(table)
+    elements.append(Spacer(1,12))
+
+    # Tabel Ringkasan
+    elements.append(Paragraph("<b>📊 Ringkasan Per Guru</b>", styles['Heading2']))
+    if df_ringkasan.empty:
+        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
+    else:
+        data_sum = [df_ringkasan.columns.tolist()] + df_ringkasan.astype(str).values.tolist()
+        table_sum = Table(data_sum)
+        table_sum.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.lightgreen),
+            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
+            ('ALIGN',(0,0),(-1,-1),'CENTER'),
+            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
+        ]))
+        elements.append(table_sum)
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
