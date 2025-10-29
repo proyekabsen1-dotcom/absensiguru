@@ -71,23 +71,18 @@ def append_absen_row(row):
     load_sheet_df.clear()
 
 def hitung_denda(nama, jam_masuk, status):
-    """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
     batas = dt_time(7,0) if nama in piket else dt_time(7,10)
     jam = datetime.strptime(jam_masuk,"%H:%M:%S").time()
-    if jam > batas:
-        return 2000
-    return 0
+    return 2000 if jam > batas else 0
 
 def create_pdf(df, title):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
-    elements = []
-    elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
-    elements.append(Spacer(1,12))
+    elements = [Paragraph(f"<b>{title}</b>", styles['Title']), Spacer(1,12)]
     if df.empty:
         elements.append(Paragraph("Tidak ada data.", styles['Normal']))
     else:
@@ -105,24 +100,20 @@ def create_pdf(df, title):
     return buffer
 
 def play_fireworks():
-    html = """
-    <div style='position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none;'>
-        <canvas id='fireworks'></canvas>
-    </div>
-    <script>
-    const canvas=document.getElementById('fireworks');
-    const ctx=canvas.getContext('2d');
-    canvas.width=window.innerWidth;
-    canvas.height=window.innerHeight;
-    const fireworks=[];
-    function random(min,max){return Math.random()*(max-min)+min;}
-    function Firework(x,y){this.x=x;this.y=y;this.color=`hsl(${Math.floor(Math.random()*360)},100%,60%)`;this.radius=random(2,4);this.alpha=1;this.vx=random(-5,5);this.vy=random(-5,5);}
-    Firework.prototype.update=function(){this.x+=this.vx;this.y+=this.vy;this.alpha-=0.02;}
-    function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);for(let i=0;i<fireworks.length;i++){const f=fireworks[i];ctx.beginPath();ctx.arc(f.x,f.y,f.radius,0,2*Math.PI);ctx.fillStyle=f.color;ctx.globalAlpha=f.alpha;ctx.fill();f.update();}requestAnimationFrame(animate);}
-    for(let i=0;i<100;i++){fireworks.push(new Firework(window.innerWidth/2,window.innerHeight/2));}
-    animate();
-    </script>
-    """
+    html = """<div style='position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none;'>
+        <canvas id='fireworks'></canvas></div>
+        <script>
+        const canvas=document.getElementById('fireworks');
+        const ctx=canvas.getContext('2d');
+        canvas.width=window.innerWidth;
+        canvas.height=window.innerHeight;
+        const fireworks=[];
+        function random(min,max){return Math.random()*(max-min)+min;}
+        function Firework(x,y){this.x=x;this.y=y;this.color=`hsl(${Math.floor(Math.random()*360)},100%,60%)`;this.radius=random(2,4);this.alpha=1;this.vx=random(-5,5);this.vy=random(-5,5);}
+        Firework.prototype.update=function(){this.x+=this.vx;this.y+=this.vy;this.alpha-=0.02;}
+        function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);for(let i=0;i<fireworks.length;i++){const f=fireworks[i];ctx.beginPath();ctx.arc(f.x,f.y,f.radius,0,2*Math.PI);ctx.fillStyle=f.color;ctx.globalAlpha=f.alpha;ctx.fill();f.update();}requestAnimationFrame(animate);}
+        for(let i=0;i<100;i++){fireworks.push(new Firework(window.innerWidth/2,window.innerHeight/2));}
+        animate();</script>"""
     st.markdown(html, unsafe_allow_html=True)
 
 # ---------------------------
@@ -142,8 +133,8 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 if menu == "Absensi":
     tz = pytz.timezone("Asia/Jakarta")
     placeholder = st.empty()
-    
     st.subheader("Input Absensi")
+
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
         status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
@@ -157,20 +148,27 @@ if menu == "Absensi":
             append_absen_row(row)
             play_fireworks()
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
-    
-    # Update jam real-time
+
     for _ in range(10):
         now = datetime.now(tz)
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-    # Tampilan siapa saja yang sudah absen hari ini
     df_today = load_sheet_df()
-    df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
-    hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
-    if not hari_ini.empty:
-        st.subheader("✅ Guru yang sudah absen hari ini")
-        st.dataframe(hari_ini[['Nama Guru','Status','Jam Masuk','Denda','Keterangan']])
+    if not df_today.empty:
+        df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
+        hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
+        if not hari_ini.empty:
+            st.subheader("✅ Guru yang sudah absen hari ini")
+            hari_ini_display = hari_ini.reset_index(drop=True)
+            hari_ini_display.index += 1
+            hari_ini_display = hari_ini_display.rename(columns={
+                "Jam Masuk": "Jam Kedatangan",
+                "Nama Guru": "Nama Guru",
+                "Status": "Kehadiran",
+                "Denda": "Keterangan Denda"
+            })
+            st.dataframe(hari_ini_display[["Jam Kedatangan","Nama Guru","Kehadiran","Keterangan Denda","Keterangan"]])
 
 # ---------------------------
 # REKAP PAGE
@@ -184,23 +182,42 @@ elif menu == "Rekap":
 
     df['Tanggal'] = pd.to_datetime(df['Tanggal'])
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
+
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # --- REKAP HARIAN ---
+    # Rekap Harian
     with tab1:
-        st.subheader("📅 Rekap Harian Lengkap")
-        df_sorted = df.sort_values(by=["Tanggal","Jam Masuk"])
-        df_sorted = df_sorted.reset_index(drop=True)
-        df_sorted.index += 1
-        df_sorted_display = df_sorted.rename(columns={
-            "Jam Masuk": "Jam Kedatangan",
-            "Nama Guru": "Nama Guru",
-            "Status": "Keterangan Kehadiran",
-            "Denda": "Keterangan Denda"
-        })
-        df_sorted_display = df_sorted_display[["Jam Kedatangan","Nama Guru","Keterangan Kehadiran","Keterangan Denda","Keterangan"]]
-        st.dataframe(df_sorted_display)
+        st.subheader("Rekap Harian Lengkap")
+        df_harian = df.copy()
+        df_harian = df_harian.reset_index(drop=True)
+        df_harian.index += 1
+        st.dataframe(df_harian[["Tanggal","Jam Masuk","Nama Guru","Status","Denda","Keterangan"]])
 
-        # Export ke PDF
-        pdf_buffer = create_pdf(df_sorted_display, "Rekap Harian Absensi Guru")
-        st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
+    # Rekap Bulanan
+    with tab2:
+        bulan_pilih = st.selectbox("Pilih Bulan", sorted(df["Bulan"].unique()))
+        df_bulan = df[df["Bulan"] == bulan_pilih]
+        if not df_bulan.empty:
+            rekap = df_bulan.groupby("Nama Guru").agg(
+                Hadir=('Status', lambda x: (x=='Hadir').sum()),
+                Izin=('Status', lambda x: (x=='Izin').sum()),
+                Cuti=('Status', lambda x: (x=='Cuti').sum()),
+                TidakHadir=('Status', lambda x: (x=='Tidak Hadir').sum()),
+                TotalDenda=('Denda', 'sum')
+            ).reset_index()
+            rekap.index += 1
+            st.dataframe(rekap)
+            pdf_buffer = create_pdf(rekap, f"Rekap Bulanan - {bulan_pilih}")
+            st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, f"rekap_bulanan_{bulan_pilih}.pdf", "application/pdf")
+
+    # Rekap Per Guru
+    with tab3:
+        guru_pilih = st.selectbox("Pilih Guru", guru_list)
+        bulan_guru = st.selectbox("Pilih Bulan (Per Guru)", sorted(df["Bulan"].unique()))
+        df_guru = df[(df["Nama Guru"]==guru_pilih) & (df["Bulan"]==bulan_guru)]
+        if not df_guru.empty:
+            df_guru = df_guru.reset_index(drop=True)
+            df_guru.index += 1
+            st.dataframe(df_guru[["Tanggal","Nama Guru","Status","Denda","Keterangan"]])
+            pdf_buffer = create_pdf(df_guru, f"Rekap {guru_pilih} - {bulan_guru}")
+            st.download_button("📄 Unduh PDF Rekap Per Guru", pdf_buffer, f"rekap_{guru_pilih}_{bulan_guru}.pdf", "application/pdf")
