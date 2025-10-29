@@ -29,7 +29,7 @@ if not SPREADSHEET_URL or not GOOGLE_SERVICE_ACCOUNT:
 # ---------------------------
 try:
     credentials_dict = json.loads(GOOGLE_SERVICE_ACCOUNT)
-    scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scopes)
     gc = gspread.authorize(creds)
 except Exception as e:
@@ -50,27 +50,27 @@ try:
     worksheet = sh.worksheet(SHEET_TITLE)
 except gspread.exceptions.WorksheetNotFound:
     worksheet = sh.add_worksheet(title=SHEET_TITLE, rows="2000", cols="20")
-    header = ["No", "Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
+    header = ["No", "Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan"]
     worksheet.append_row(header)
 
 # ---------------------------
 # LIST GURU
 # ---------------------------
-guru_list = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B","Ustadz C"]
+guru_list = ["Yolan", "Husnia", "Rima", "Rifa", "Sela", "Ustadz A", "Ustadz B", "Ustadz C"]
 
 # ---------------------------
-# HELPERS
+# HELPER FUNCTIONS
 # ---------------------------
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
     df = pd.DataFrame(records)
     if not df.empty:
-        # Bersihkan spasi dan seragamkan nama kolom
         df.columns = df.columns.str.strip().str.title()
-        # Tambahkan No otomatis jika belum ada atau kosong
-        if 'No' not in df.columns or df['No'].isnull().all():
-            df.insert(0, 'No', range(1, len(df)+1))
+        if "No" not in df.columns or df["No"].isnull().all():
+            df.insert(0, "No", range(1, len(df) + 1))
+    else:
+        df = pd.DataFrame(columns=["No", "Tanggal", "Nama Guru", "Status", "Jam Masuk", "Denda", "Keterangan"])
     return df
 
 def append_absen_row(row):
@@ -82,32 +82,30 @@ def append_absen_row(row):
 def hitung_denda(nama, jam_masuk, status):
     if status != "Hadir":
         return 4000
-    piket = ["Ustadz A","Ustadz B","Ustadz C"]
-    batas = dt_time(7,0) if nama in piket else dt_time(7,10)
-    jam = datetime.strptime(jam_masuk,"%H:%M:%S").time()
-    if jam > batas:
-        return 2000
-    return 0
+    piket = ["Ustadz A", "Ustadz B", "Ustadz C"]
+    batas = dt_time(7, 0) if nama in piket else dt_time(7, 10)
+    jam = datetime.strptime(jam_masuk, "%H:%M:%S").time()
+    return 2000 if jam > batas else 0
 
 def create_pdf(df, title):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
-    elements = []
-    elements.append(Paragraph(f"<b>{title}</b>", styles['Title']))
-    elements.append(Spacer(1,12))
+    elements = [Paragraph(f"<b>{title}</b>", styles["Title"]), Spacer(1, 12)]
+
     if df.empty:
-        elements.append(Paragraph("Tidak ada data.", styles['Normal']))
+        elements.append(Paragraph("Tidak ada data.", styles["Normal"]))
     else:
         data = [df.columns.tolist()] + df.astype(str).values.tolist()
         table = Table(data)
         table.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),colors.lightblue),
-            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
-            ('ALIGN',(0,0),(-1,-1),'CENTER'),
-            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold')
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightblue),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
         ]))
         elements.append(table)
+
     doc.build(elements)
     buffer.seek(0)
     return buffer
@@ -146,7 +144,7 @@ st.title("📘 Absensi Guru SD Tahfidz BKQ")
 # ---------------------------
 # MENU
 # ---------------------------
-menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
+menu = st.sidebar.radio("📋 Menu", ["Absensi", "Rekap"])
 
 # ---------------------------
 # ABSENSI PAGE
@@ -154,13 +152,14 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 if menu == "Absensi":
     tz = pytz.timezone("Asia/Jakarta")
     placeholder = st.empty()
-    
+
     st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
-        status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
+        status_manual = st.selectbox("Status", ["Hadir", "Izin", "Cuti", "Tidak Hadir"])
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
+
         if submitted:
             now = datetime.now(tz)
             jam_masuk = now.strftime("%H:%M:%S")
@@ -170,25 +169,23 @@ if menu == "Absensi":
             play_fireworks()
             st.audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg")
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
-    
+
     # Update jam real-time
     for _ in range(10):
         now = datetime.now(tz)
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-   # Tabel absen hari ini
-df_today = load_sheet_df()
-df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
-# filter yang valid untuk hari ini
-hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(tz).date())]
+    # Tabel absen hari ini
+    df_today = load_sheet_df()
+    df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
+    hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(tz).date())]
 
-if not hari_ini.empty:
-    st.subheader("✅ Guru yang sudah absen hari ini")
-    st.dataframe(hari_ini[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
-    total_denda = hari_ini["Denda"].sum()
-    st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
-
+    if not hari_ini.empty:
+        st.subheader("✅ Guru yang sudah absen hari ini")
+        st.dataframe(hari_ini[['No', 'Jam Masuk', 'Nama Guru', 'Status', 'Denda', 'Keterangan']])
+        total_denda = hari_ini["Denda"].sum()
+        st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
 
 # ---------------------------
 # REKAP PAGE
@@ -206,21 +203,19 @@ elif menu == "Rekap":
         st.stop()
 
     df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
-    df = df[df['Tanggal'].notna()]  # buang baris yang tanggalnya tidak valid
-    tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
+    df = df[df['Tanggal'].notna()]
+
+    tab1, tab2, tab3 = st.tabs(["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
 
     # --- Rekap Harian
     with tab1:
         tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
         df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
         if not df_harian.empty:
-            st.dataframe(df_harian[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
+            st.dataframe(df_harian[['No', 'Jam Masuk', 'Nama Guru', 'Status', 'Denda', 'Keterangan']])
             total_denda = df_harian["Denda"].sum()
             st.markdown(f"💰 **Total Denda:** Rp{total_denda:,}")
             pdf_buffer = create_pdf(df_harian, f"Rekap Absensi {tgl_pilih}")
             st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
         else:
             st.info("Tidak ada data pada tanggal ini.")
-
-
-
