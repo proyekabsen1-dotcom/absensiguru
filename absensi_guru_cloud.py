@@ -169,14 +169,21 @@ if menu == "Absensi":
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-    df_today = load_sheet_df()
-    df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
-    hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
-    if not hari_ini.empty:
-        st.subheader("✅ Guru yang sudah absen hari ini")
-        st.dataframe(hari_ini[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
-        total_denda = hari_ini["Denda"].sum()
-        st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
+    # Tabel absen hari ini
+df_today = load_sheet_df()
+# Ubah ke datetime aman
+df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
+# Hanya pilih baris dengan tanggal valid dan sama dengan hari ini
+hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(pytz.timezone("Asia/Jakarta")).date())]
+
+if not hari_ini.empty:
+    st.subheader("✅ Guru yang sudah absen hari ini")
+    st.dataframe(hari_ini[['No', 'Jam Masuk', 'Nama Guru', 'Status', 'Denda', 'Keterangan']])
+    total_denda = hari_ini["Denda"].sum()
+    st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
+else:
+    st.info("Belum ada guru yang absen hari ini atau data tanggal tidak valid.")
+
 
 # ---------------------------
 # REKAP PAGE
@@ -250,3 +257,4 @@ elif menu == "Rekap":
                 st.info("Tidak ada data untuk guru ini pada bulan ini.")
         else:
             st.info("Belum ada data guru atau bulan untuk ditampilkan.")
+
