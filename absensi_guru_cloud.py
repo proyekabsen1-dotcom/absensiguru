@@ -128,7 +128,7 @@ def play_fireworks():
 # ---------------------------
 # HEADER
 # ---------------------------
-st.image("https://drive.google.com/file/d/1csNtJDH5DwG3wUNQNtHLK-QA9uMBvDSn/view?usp=sharing", width=90)
+st.image("https://github.com/proyekabsen1-dotcom/absensiguru/blob/main/1749893097089.png", width=90)
 st.title("📘 Absensi Guru SD Tahfidz BKQ")
 
 # ---------------------------
@@ -192,4 +192,5 @@ elif menu == "Rekap":
         st.dataframe(harian)
         pdf_buffer = create_pdf(harian, "Rekap Harian Absensi Guru")
         st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
+
 
