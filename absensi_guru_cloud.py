@@ -217,8 +217,8 @@ elif menu == "Rekap":
         else:
             st.info("Tidak ada data pada tanggal ini.")
 
-        # --- Rekap Bulanan
-     with tab2:
+    # --- Rekap Bulanan
+    with tab2:
         bulan_pilih = st.selectbox("Pilih Bulan", sorted(df['Tanggal'].dt.to_period('M').astype(str).unique()), index=-1)
         df_bulan = df[df['Tanggal'].dt.to_period('M').astype(str) == bulan_pilih]
         if not df_bulan.empty:
@@ -250,6 +250,7 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
