@@ -200,7 +200,7 @@ elif menu == "Rekap":
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # --- Rekap Harian
+    # --- Rekap Harian (tetap sama)
     with tab1:
         tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
         df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
@@ -215,37 +215,42 @@ elif menu == "Rekap":
 
     # --- Rekap Bulanan
     with tab2:
-        bulan_list = df['Bulan'].sort_values().unique()
-        bulan_pilih = st.selectbox("Pilih Bulan", bulan_list)
-        df_bulan = df[df['Bulan'] == bulan_pilih]
-        
-        if not df_bulan.empty:
-            # Hitung jumlah hadir, izin, cuti, sakit per guru
-            rekap_bulan = df_bulan.groupby('Nama Guru').agg(
-                Jumlah_Hadir = ('Status', lambda x: (x=='Hadir').sum()),
-                Jumlah_Izin = ('Status', lambda x: (x=='Izin').sum()),
-                Jumlah_Cuti = ('Status', lambda x: (x=='Cuti').sum()),
-                Jumlah_Sakit = ('Status', lambda x: (x=='Sakit').sum()),
-                Total_Denda = ('Denda', 'sum')
-            ).reset_index()
-            rekap_bulan.insert(0, 'No', range(1, len(rekap_bulan)+1))
-            st.dataframe(rekap_bulan)
-            pdf_buffer = create_pdf(rekap_bulan, f"Rekap Bulanan {bulan_pilih}")
-            st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, f"rekap_bulanan_{bulan_pilih}.pdf", "application/pdf")
+        bulan_list = df['Bulan'].dropna().sort_values().unique()
+        if len(bulan_list) > 0:
+            bulan_pilih = st.selectbox("Pilih Bulan", bulan_list, index=len(bulan_list)-1)
+            df_bulan = df[df['Bulan']==bulan_pilih]
+            if not df_bulan.empty:
+                # Hitung rekap
+                rekap_bulan = df_bulan.groupby("Nama Guru").agg(
+                    Hadir=('Status', lambda x: (x=='Hadir').sum()),
+                    Izin=('Status', lambda x: (x=='Izin').sum()),
+                    Cuti=('Status', lambda x: (x=='Cuti').sum()),
+                    Sakit=('Status', lambda x: (x=='Sakit').sum()),
+                    Total_Denda=('Denda','sum')
+                ).reset_index()
+                rekap_bulan.insert(0,'No', range(1,len(rekap_bulan)+1))
+                st.dataframe(rekap_bulan)
+            else:
+                st.info("Tidak ada data pada bulan ini.")
         else:
-            st.info("Tidak ada data pada bulan ini.")
+            st.info("Belum ada data bulan untuk ditampilkan.")
 
     # --- Rekap Per Guru
     with tab3:
-        guru_list2 = df['Nama Guru'].sort_values().unique()
-        guru_pilih = st.selectbox("Pilih Guru", guru_list2)
-        bulan_pilih2 = st.selectbox("Pilih Bulan", bulan_list, index=len(bulan_list)-1)
-        df_guru = df[(df['Nama Guru']==guru_pilih) & (df['Bulan']==bulan_pilih2)]
-        
-        if not df_guru.empty:
-            df_guru = df_guru[['No','Tanggal','Nama Guru','Status','Denda','Keterangan']]
-            st.dataframe(df_guru)
-            pdf_buffer = create_pdf(df_guru, f"Rekap {guru_pilih} Bulan {bulan_pilih2}")
-            st.download_button("📄 Unduh PDF Rekap Per Guru", pdf_buffer, f"rekap_{guru_pilih}_{bulan_pilih2}.pdf", "application/pdf")
+        guru_list2 = df['Nama Guru'].dropna().sort_values().unique()
+        bulan_list2 = df['Bulan'].dropna().sort_values().unique()
+        if len(guru_list2)>0 and len(bulan_list2)>0:
+            guru_pilih = st.selectbox("Pilih Guru", guru_list2)
+            bulan_pilih2 = st.selectbox("Pilih Bulan", bulan_list2, index=len(bulan_list2)-1)
+            df_guru = df[(df['Nama Guru']==guru_pilih) & (df['Bulan']==bulan_pilih2)]
+            if not df_guru.empty:
+                df_guru = df_guru.sort_values("Tanggal")
+                df_guru.reset_index(drop=True, inplace=True)
+                df_guru.index += 1  # No
+                df_guru_display = df_guru[['Tanggal','Nama Guru','Status','Denda','Keterangan']].copy()
+                df_guru_display.insert(0,'No', df_guru.index)
+                st.dataframe(df_guru_display)
+            else:
+                st.info("Tidak ada data untuk guru ini pada bulan ini.")
         else:
-            st.info("Tidak ada data untuk guru ini pada bulan ini.")
+            st.info("Belum ada data guru atau bulan untuk ditampilkan.")
