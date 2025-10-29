@@ -64,22 +64,16 @@ guru_list = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B","Ustadz
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
-    df = pd.DataFrame(records)
-    if not df.empty:
-        # Bersihkan spasi dan seragamkan nama kolom
-        df.columns = df.columns.str.strip().str.title()
-        # Tambahkan No otomatis jika belum ada atau kosong
-        if 'No' not in df.columns or df['No'].isnull().all():
-            df.insert(0, 'No', range(1, len(df)+1))
-    return df
+    return pd.DataFrame(records) if records else pd.DataFrame(columns=["No","Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"])
 
 def append_absen_row(row):
-    df_existing = load_sheet_df()
-    no = len(df_existing) + 1
+    existing = worksheet.get_all_records()
+    no = len(existing) + 1
     worksheet.append_row([no] + row)
     load_sheet_df.clear()
 
 def hitung_denda(nama, jam_masuk, status):
+    """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
@@ -158,7 +152,7 @@ if menu == "Absensi":
     st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
-        status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
+        status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir","Sakit"])
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
         if submitted:
@@ -177,7 +171,7 @@ if menu == "Absensi":
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-    # Tabel absen hari ini
+    # Tampilan siapa saja yang sudah absen hari ini
     df_today = load_sheet_df()
     df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
     hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
@@ -218,3 +212,40 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
         else:
             st.info("Tidak ada data pada tanggal ini.")
+
+    # --- Rekap Bulanan
+    with tab2:
+        bulan_list = df['Bulan'].sort_values().unique()
+        bulan_pilih = st.selectbox("Pilih Bulan", bulan_list)
+        df_bulan = df[df['Bulan'] == bulan_pilih]
+        
+        if not df_bulan.empty:
+            # Hitung jumlah hadir, izin, cuti, sakit per guru
+            rekap_bulan = df_bulan.groupby('Nama Guru').agg(
+                Jumlah_Hadir = ('Status', lambda x: (x=='Hadir').sum()),
+                Jumlah_Izin = ('Status', lambda x: (x=='Izin').sum()),
+                Jumlah_Cuti = ('Status', lambda x: (x=='Cuti').sum()),
+                Jumlah_Sakit = ('Status', lambda x: (x=='Sakit').sum()),
+                Total_Denda = ('Denda', 'sum')
+            ).reset_index()
+            rekap_bulan.insert(0, 'No', range(1, len(rekap_bulan)+1))
+            st.dataframe(rekap_bulan)
+            pdf_buffer = create_pdf(rekap_bulan, f"Rekap Bulanan {bulan_pilih}")
+            st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, f"rekap_bulanan_{bulan_pilih}.pdf", "application/pdf")
+        else:
+            st.info("Tidak ada data pada bulan ini.")
+
+    # --- Rekap Per Guru
+    with tab3:
+        guru_list2 = df['Nama Guru'].sort_values().unique()
+        guru_pilih = st.selectbox("Pilih Guru", guru_list2)
+        bulan_pilih2 = st.selectbox("Pilih Bulan", bulan_list, index=len(bulan_list)-1)
+        df_guru = df[(df['Nama Guru']==guru_pilih) & (df['Bulan']==bulan_pilih2)]
+        
+        if not df_guru.empty:
+            df_guru = df_guru[['No','Tanggal','Nama Guru','Status','Denda','Keterangan']]
+            st.dataframe(df_guru)
+            pdf_buffer = create_pdf(df_guru, f"Rekap {guru_pilih} Bulan {bulan_pilih2}")
+            st.download_button("📄 Unduh PDF Rekap Per Guru", pdf_buffer, f"rekap_{guru_pilih}_{bulan_pilih2}.pdf", "application/pdf")
+        else:
+            st.info("Tidak ada data untuk guru ini pada bulan ini.")
