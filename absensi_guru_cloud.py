@@ -177,16 +177,18 @@ if menu == "Absensi":
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-    # Tabel absen hari ini
-    df_today = load_sheet_df()
-    df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
-    # kemudian filter yang valid
-    hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(tz).date())]
-    if not hari_ini.empty:
-        st.subheader("✅ Guru yang sudah absen hari ini")
-        st.dataframe(hari_ini[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
-        total_denda = hari_ini["Denda"].sum()
-        st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
+   # Tabel absen hari ini
+df_today = load_sheet_df()
+df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
+# filter yang valid untuk hari ini
+hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(tz).date())]
+
+if not hari_ini.empty:
+    st.subheader("✅ Guru yang sudah absen hari ini")
+    st.dataframe(hari_ini[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
+    total_denda = hari_ini["Denda"].sum()
+    st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
+
 
 # ---------------------------
 # REKAP PAGE
@@ -219,5 +221,6 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
         else:
             st.info("Tidak ada data pada tanggal ini.")
+
 
 
