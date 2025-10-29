@@ -179,9 +179,10 @@ if menu == "Absensi":
 
     # Tabel absen hari ini
     df_today = load_sheet_df()
-    df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
-    hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
-    if not hari_ini.empty:
+    df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
+    # kemudian filter yang valid
+    hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(tz).date())]
+     if not hari_ini.empty:
         st.subheader("✅ Guru yang sudah absen hari ini")
         st.dataframe(hari_ini[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
         total_denda = hari_ini["Denda"].sum()
@@ -202,8 +203,8 @@ elif menu == "Rekap":
         st.info("Belum ada data absensi.")
         st.stop()
 
-    df['Tanggal'] = pd.to_datetime(df['Tanggal'])
-    df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
+    df = df[df['Tanggal'].notna()]  # buang baris yang tanggalnya tidak valid
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
     # --- Rekap Harian
@@ -218,3 +219,4 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
         else:
             st.info("Tidak ada data pada tanggal ini.")
+
