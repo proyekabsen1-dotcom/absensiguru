@@ -73,7 +73,6 @@ def append_absen_row(row):
     load_sheet_df.clear()
 
 def hitung_denda(nama, jam_masuk, status):
-    """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
@@ -152,7 +151,7 @@ if menu == "Absensi":
     st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
-        status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir","Sakit"])
+        status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
         if submitted:
@@ -165,13 +164,11 @@ if menu == "Absensi":
             st.audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg")
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
     
-    # Update jam real-time
     for _ in range(10):
         now = datetime.now(tz)
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-    # Tampilan siapa saja yang sudah absen hari ini
     df_today = load_sheet_df()
     df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
     hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
@@ -200,7 +197,7 @@ elif menu == "Rekap":
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # --- Rekap Harian (tetap sama)
+    # Harian
     with tab1:
         tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
         df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
@@ -213,14 +210,13 @@ elif menu == "Rekap":
         else:
             st.info("Tidak ada data pada tanggal ini.")
 
-    # --- Rekap Bulanan
+    # Bulanan
     with tab2:
         bulan_list = df['Bulan'].dropna().sort_values().unique()
         if len(bulan_list) > 0:
             bulan_pilih = st.selectbox("Pilih Bulan", bulan_list, index=len(bulan_list)-1)
             df_bulan = df[df['Bulan']==bulan_pilih]
             if not df_bulan.empty:
-                # Hitung rekap
                 rekap_bulan = df_bulan.groupby("Nama Guru").agg(
                     Hadir=('Status', lambda x: (x=='Hadir').sum()),
                     Izin=('Status', lambda x: (x=='Izin').sum()),
@@ -235,7 +231,7 @@ elif menu == "Rekap":
         else:
             st.info("Belum ada data bulan untuk ditampilkan.")
 
-    # --- Rekap Per Guru
+    # Per Guru
     with tab3:
         guru_list2 = df['Nama Guru'].dropna().sort_values().unique()
         bulan_list2 = df['Bulan'].dropna().sort_values().unique()
@@ -246,7 +242,7 @@ elif menu == "Rekap":
             if not df_guru.empty:
                 df_guru = df_guru.sort_values("Tanggal")
                 df_guru.reset_index(drop=True, inplace=True)
-                df_guru.index += 1  # No
+                df_guru.index += 1
                 df_guru_display = df_guru[['Tanggal','Nama Guru','Status','Denda','Keterangan']].copy()
                 df_guru_display.insert(0,'No', df_guru.index)
                 st.dataframe(df_guru_display)
