@@ -73,6 +73,7 @@ def append_absen_row(row):
     load_sheet_df.clear()
 
 def hitung_denda(nama, jam_masuk, status):
+    """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
@@ -164,11 +165,13 @@ if menu == "Absensi":
             st.audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg")
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
     
+    # Update jam real-time
     for _ in range(10):
         now = datetime.now(tz)
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
+    # Tampilan siapa saja yang sudah absen hari ini
     df_today = load_sheet_df()
     df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
     hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
@@ -179,7 +182,7 @@ if menu == "Absensi":
         st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
 
 # ---------------------------
-# REKAP PAGE
+# REKAP PAGE (Upgrade)
 # ---------------------------
 elif menu == "Rekap":
     password = st.sidebar.text_input("Masukkan Kode Admin", type="password")
@@ -197,7 +200,7 @@ elif menu == "Rekap":
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # Harian
+    # --- Rekap Harian
     with tab1:
         tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
         df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
@@ -210,7 +213,7 @@ elif menu == "Rekap":
         else:
             st.info("Tidak ada data pada tanggal ini.")
 
-    # Bulanan
+    # --- Rekap Bulanan
     with tab2:
         bulan_list = df['Bulan'].dropna().sort_values().unique()
         if len(bulan_list) > 0:
@@ -231,7 +234,7 @@ elif menu == "Rekap":
         else:
             st.info("Belum ada data bulan untuk ditampilkan.")
 
-    # Per Guru
+    # --- Rekap Per Guru
     with tab3:
         guru_list2 = df['Nama Guru'].dropna().sort_values().unique()
         bulan_list2 = df['Bulan'].dropna().sort_values().unique()
