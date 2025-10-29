@@ -50,7 +50,7 @@ try:
     worksheet = sh.worksheet(SHEET_TITLE)
 except gspread.exceptions.WorksheetNotFound:
     worksheet = sh.add_worksheet(title=SHEET_TITLE, rows="2000", cols="20")
-    header = ["No", "Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
+    header = ["No","Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
     worksheet.append_row(header)
 
 # ---------------------------
@@ -178,7 +178,7 @@ if menu == "Absensi":
 
     if not hari_ini.empty:
         st.subheader("✅ Guru yang sudah absen hari ini")
-        st.dataframe(hari_ini[['No', 'Jam Masuk', 'Nama Guru', 'Status', 'Denda', 'Keterangan']])
+        st.dataframe(hari_ini[["No","Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]])
         total_denda = hari_ini["Denda"].sum()
         st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
     else:
@@ -257,5 +257,6 @@ elif menu == "Rekap":
                 st.info("Tidak ada data untuk guru ini pada bulan ini.")
         else:
             st.info("Belum ada data guru atau bulan untuk ditampilkan.")
+
 
 
