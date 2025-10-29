@@ -152,7 +152,7 @@ if menu == "Absensi":
     st.subheader("Input Absensi")
     with st.form("form_absen", clear_on_submit=True):
         nama_guru = st.selectbox("Nama Guru", guru_list)
-        status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir","Sakit"])
+        status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
         if submitted:
@@ -212,40 +212,3 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
         else:
             st.info("Tidak ada data pada tanggal ini.")
-
-    # --- Rekap Bulanan
-    with tab2:
-        bulan_list = df['Bulan'].sort_values().unique()
-        bulan_pilih = st.selectbox("Pilih Bulan", bulan_list)
-        df_bulan = df[df['Bulan'] == bulan_pilih]
-        
-        if not df_bulan.empty:
-            # Hitung jumlah hadir, izin, cuti, sakit per guru
-            rekap_bulan = df_bulan.groupby('Nama Guru').agg(
-                Jumlah_Hadir = ('Status', lambda x: (x=='Hadir').sum()),
-                Jumlah_Izin = ('Status', lambda x: (x=='Izin').sum()),
-                Jumlah_Cuti = ('Status', lambda x: (x=='Cuti').sum()),
-                Jumlah_Sakit = ('Status', lambda x: (x=='Sakit').sum()),
-                Total_Denda = ('Denda', 'sum')
-            ).reset_index()
-            rekap_bulan.insert(0, 'No', range(1, len(rekap_bulan)+1))
-            st.dataframe(rekap_bulan)
-            pdf_buffer = create_pdf(rekap_bulan, f"Rekap Bulanan {bulan_pilih}")
-            st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, f"rekap_bulanan_{bulan_pilih}.pdf", "application/pdf")
-        else:
-            st.info("Tidak ada data pada bulan ini.")
-
-    # --- Rekap Per Guru
-    with tab3:
-        guru_list2 = df['Nama Guru'].sort_values().unique()
-        guru_pilih = st.selectbox("Pilih Guru", guru_list2)
-        bulan_pilih2 = st.selectbox("Pilih Bulan", bulan_list, index=len(bulan_list)-1)
-        df_guru = df[(df['Nama Guru']==guru_pilih) & (df['Bulan']==bulan_pilih2)]
-        
-        if not df_guru.empty:
-            df_guru = df_guru[['No','Tanggal','Nama Guru','Status','Denda','Keterangan']]
-            st.dataframe(df_guru)
-            pdf_buffer = create_pdf(df_guru, f"Rekap {guru_pilih} Bulan {bulan_pilih2}")
-            st.download_button("📄 Unduh PDF Rekap Per Guru", pdf_buffer, f"rekap_{guru_pilih}_{bulan_pilih2}.pdf", "application/pdf")
-        else:
-            st.info("Tidak ada data untuk guru ini pada bulan ini.")
