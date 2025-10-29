@@ -219,7 +219,8 @@ elif menu == "Rekap":
 
     # --- Rekap Bulanan
     with tab2:
-        bulan_pilih = st.selectbox("Pilih Bulan", sorted(df['Tanggal'].dt.to_period('M').astype(str).unique()), index=-1)
+        bulan_list = sorted(df['Tanggal'].dt.to_period('M').astype(str).unique())default_index = len(bulan_list) - 1 if bulan_list else 0
+        bulan_pilih = st.selectbox("Pilih Bulan", bulan_list,index=default_index)      
         df_bulan = df[df['Tanggal'].dt.to_period('M').astype(str) == bulan_pilih]
         if not df_bulan.empty:
             st.dataframe(df_bulan[['No','Tanggal','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
@@ -250,6 +251,7 @@ elif menu == "Rekap":
         st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
     else:
         st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
