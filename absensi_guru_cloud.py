@@ -50,7 +50,7 @@ try:
     worksheet = sh.worksheet(SHEET_TITLE)
 except gspread.exceptions.WorksheetNotFound:
     worksheet = sh.add_worksheet(title=SHEET_TITLE, rows="2000", cols="20")
-    header = ["No","Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
+    header = ["No", "Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]
     worksheet.append_row(header)
 
 # ---------------------------
@@ -64,11 +64,16 @@ guru_list = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B","Ustadz
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
-    return pd.DataFrame(records) if records else pd.DataFrame(columns=["No","Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"])
+    df = pd.DataFrame(records)
+    if not df.empty:
+        df.columns = df.columns.str.strip().str.title()
+        if 'No' not in df.columns or df['No'].isnull().all():
+            df.insert(0, 'No', range(1, len(df)+1))
+    return df
 
 def append_absen_row(row):
-    existing = worksheet.get_all_records()
-    no = len(existing) + 1
+    df_existing = load_sheet_df()
+    no = len(df_existing) + 1
     worksheet.append_row([no] + row)
     load_sheet_df.clear()
 
@@ -133,7 +138,6 @@ try:
     st.image("https://raw.githubusercontent.com/proyekabsen1-dotcom/absensiguru/main/1749893097089.png", width=90)
 except:
     st.markdown("### 🏫 SD Tahfidz BKQ")
-
 st.title("📘 Absensi Guru SD Tahfidz BKQ")
 
 # ---------------------------
@@ -164,26 +168,28 @@ if menu == "Absensi":
             st.audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg")
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
     
+    # Update jam real-time
     for _ in range(10):
         now = datetime.now(tz)
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-    # Tabel absen hari ini
+    # --- Tabel Absen Hari Ini ---
     df_today = load_sheet_df()
-    # Ubah ke datetime aman
+    df_today.columns = df_today.columns.str.strip().str.title()
+    for col in ['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']:
+        if col not in df_today.columns:
+            df_today[col] = ""
     df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
-    # Hanya pilih baris dengan tanggal valid dan sama dengan hari ini
-    hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(pytz.timezone("Asia/Jakarta")).date())]
+    hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(tz).date())]
 
     if not hari_ini.empty:
         st.subheader("✅ Guru yang sudah absen hari ini")
-        st.dataframe(hari_ini[["No","Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"]])
+        st.dataframe(hari_ini[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
         total_denda = hari_ini["Denda"].sum()
         st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
     else:
         st.info("Belum ada guru yang absen hari ini atau data tanggal tidak valid.")
-
 
 # ---------------------------
 # REKAP PAGE
@@ -200,11 +206,16 @@ elif menu == "Rekap":
         st.info("Belum ada data absensi.")
         st.stop()
 
-    df['Tanggal'] = pd.to_datetime(df['Tanggal'])
-    df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
+    df.columns = df.columns.str.strip().str.title()
+    for col in ['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']:
+        if col not in df.columns:
+            df[col] = ""
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
+    df = df[df['Tanggal'].notna()]
+
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # Harian
+    # --- Rekap Harian
     with tab1:
         tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
         df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
@@ -216,47 +227,3 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
         else:
             st.info("Tidak ada data pada tanggal ini.")
-
-    # Bulanan
-    with tab2:
-        bulan_list = df['Bulan'].dropna().sort_values().unique()
-        if len(bulan_list) > 0:
-            bulan_pilih = st.selectbox("Pilih Bulan", bulan_list, index=len(bulan_list)-1)
-            df_bulan = df[df['Bulan']==bulan_pilih]
-            if not df_bulan.empty:
-                rekap_bulan = df_bulan.groupby("Nama Guru").agg(
-                    Hadir=('Status', lambda x: (x=='Hadir').sum()),
-                    Izin=('Status', lambda x: (x=='Izin').sum()),
-                    Cuti=('Status', lambda x: (x=='Cuti').sum()),
-                    Sakit=('Status', lambda x: (x=='Sakit').sum()),
-                    Total_Denda=('Denda','sum')
-                ).reset_index()
-                rekap_bulan.insert(0,'No', range(1,len(rekap_bulan)+1))
-                st.dataframe(rekap_bulan)
-            else:
-                st.info("Tidak ada data pada bulan ini.")
-        else:
-            st.info("Belum ada data bulan untuk ditampilkan.")
-
-    # Per Guru
-    with tab3:
-        guru_list2 = df['Nama Guru'].dropna().sort_values().unique()
-        bulan_list2 = df['Bulan'].dropna().sort_values().unique()
-        if len(guru_list2)>0 and len(bulan_list2)>0:
-            guru_pilih = st.selectbox("Pilih Guru", guru_list2)
-            bulan_pilih2 = st.selectbox("Pilih Bulan", bulan_list2, index=len(bulan_list2)-1)
-            df_guru = df[(df['Nama Guru']==guru_pilih) & (df['Bulan']==bulan_pilih2)]
-            if not df_guru.empty:
-                df_guru = df_guru.sort_values("Tanggal")
-                df_guru.reset_index(drop=True, inplace=True)
-                df_guru.index += 1
-                df_guru_display = df_guru[['Tanggal','Nama Guru','Status','Denda','Keterangan']].copy()
-                df_guru_display.insert(0,'No', df_guru.index)
-                st.dataframe(df_guru_display)
-            else:
-                st.info("Tidak ada data untuk guru ini pada bulan ini.")
-        else:
-            st.info("Belum ada data guru atau bulan untuk ditampilkan.")
-
-
-
