@@ -208,7 +208,7 @@ elif menu == "Rekap":
         tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
         df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
         if not df_harian.empty:
-            st.dataframe(df_harian[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
+            st.dataframe(df_harian[['Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
             total_denda = df_harian["Denda"].sum()
             st.markdown(f"💰 **Total Denda:** Rp{total_denda:,}")
             pdf_buffer = create_pdf(df_harian, f"Rekap Absensi {tgl_pilih}")
@@ -258,6 +258,7 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
