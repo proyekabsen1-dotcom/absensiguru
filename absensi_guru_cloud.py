@@ -186,9 +186,21 @@ elif menu == "Rekap":
     df['Bulan'] = df['Tanggal'].dt.to_period('M').astype(str)
     tab1, tab2, tab3 = st.tabs(["📅 Harian","📆 Bulanan","👤 Per Guru"])
 
-    # Rekap Harian
+    # --- REKAP HARIAN ---
     with tab1:
-        harian = df.groupby("Tanggal").size().reset_index(name="Jumlah Kehadiran")
-        st.dataframe(harian)
-        pdf_buffer = create_pdf(harian, "Rekap Harian Absensi Guru")
+        st.subheader("📅 Rekap Harian Lengkap")
+        df_sorted = df.sort_values(by=["Tanggal","Jam Masuk"])
+        df_sorted = df_sorted.reset_index(drop=True)
+        df_sorted.index += 1
+        df_sorted_display = df_sorted.rename(columns={
+            "Jam Masuk": "Jam Kedatangan",
+            "Nama Guru": "Nama Guru",
+            "Status": "Keterangan Kehadiran",
+            "Denda": "Keterangan Denda"
+        })
+        df_sorted_display = df_sorted_display[["Jam Kedatangan","Nama Guru","Keterangan Kehadiran","Keterangan Denda","Keterangan"]]
+        st.dataframe(df_sorted_display)
+
+        # Export ke PDF
+        pdf_buffer = create_pdf(df_sorted_display, "Rekap Harian Absensi Guru")
         st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
