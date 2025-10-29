@@ -64,16 +64,22 @@ guru_list = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B","Ustadz
 @st.cache_data(ttl=20)
 def load_sheet_df():
     records = worksheet.get_all_records()
-    return pd.DataFrame(records) if records else pd.DataFrame(columns=["No","Tanggal","Nama Guru","Status","Jam Masuk","Denda","Keterangan"])
+    df = pd.DataFrame(records)
+    if not df.empty:
+        # Bersihkan spasi dan seragamkan nama kolom
+        df.columns = df.columns.str.strip().str.title()
+        # Tambahkan No otomatis jika belum ada atau kosong
+        if 'No' not in df.columns or df['No'].isnull().all():
+            df.insert(0, 'No', range(1, len(df)+1))
+    return df
 
 def append_absen_row(row):
-    existing = worksheet.get_all_records()
-    no = len(existing) + 1
+    df_existing = load_sheet_df()
+    no = len(df_existing) + 1
     worksheet.append_row([no] + row)
     load_sheet_df.clear()
 
 def hitung_denda(nama, jam_masuk, status):
-    """Hitung denda berdasarkan jam kedatangan"""
     if status != "Hadir":
         return 4000
     piket = ["Ustadz A","Ustadz B","Ustadz C"]
@@ -171,7 +177,7 @@ if menu == "Absensi":
         placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
         time.sleep(1)
 
-    # Tampilan siapa saja yang sudah absen hari ini
+    # Tabel absen hari ini
     df_today = load_sheet_df()
     df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'])
     hari_ini = df_today[df_today['Tanggal'].dt.date == datetime.now(tz).date()]
