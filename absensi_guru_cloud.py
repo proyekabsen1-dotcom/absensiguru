@@ -193,16 +193,16 @@ elif menu == "Rekap":
         st.warning("Masukkan kode admin untuk melihat rekap.")
         st.stop()
 
-        st.header("📑 Rekap Data Absensi Guru")
-        df = load_sheet_df()
-        if df.empty:
-            st.info("Belum ada data absensi.")
-            st.stop()
+    st.header("📑 Rekap Data Absensi Guru")
+    df = load_sheet_df()
+    if df.empty:
+        st.info("Belum ada data absensi.")
+        st.stop()
 
-        df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
-        df = df[df['Tanggal'].notna()]  # buang baris yang tanggalnya tidak valid
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
+    df = df[df['Tanggal'].notna()]  # buang baris yang tanggalnya tidak valid
 
-        tab1, tab2, tab3 = st.tabs(["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
+    tab1, tab2, tab3 = st.tabs(["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
 
         # --- Rekap Harian
         with tab1:
@@ -250,6 +250,7 @@ elif menu == "Rekap":
             st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
