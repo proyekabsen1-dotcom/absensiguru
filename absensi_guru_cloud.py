@@ -239,16 +239,17 @@ if menu == "Absensi":
                 sorted(df['Nama Guru'].unique()), 
                 index=sorted(df['Nama Guru'].unique()).index(st.session_state.guru_pilih)
             )
-            st.session_state.guru_pilih = guru_pilih
+        st.session_state.guru_pilih = guru_pilih
 
-            df_guru = df[df['Nama Guru'] == guru_pilih]
-            if not df_guru.empty:
-                st.dataframe(df_guru[['Tanggal','Jam Masuk','Status','Denda','Keterangan']])
-                total_denda = df_guru["Denda"].sum()
-                st.markdown(f"💰 **Total Denda {guru_pilih}:** Rp{total_denda:,}")
-                pdf_buffer = create_pdf(df_guru, f"Rekap Absensi {guru_pilih}")
-                st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
-            else:
-                st.info(f"Tidak ada data untuk {guru_pilih}.")
+        df_guru = df[df['Nama Guru'] == guru_pilih]
+        if not df_guru.empty:
+            st.dataframe(df_guru[['Tanggal','Jam Masuk','Status','Denda','Keterangan']])
+            total_denda = df_guru["Denda"].sum()
+            st.markdown(f"💰 **Total Denda {guru_pilih}:** Rp{total_denda:,}")
+            pdf_buffer = create_pdf(df_guru, f"Rekap Absensi {guru_pilih}")
+            st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
+        else:
+            st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
