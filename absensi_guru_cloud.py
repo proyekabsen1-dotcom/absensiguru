@@ -184,70 +184,71 @@ if menu == "Absensi":
         total_denda = hari_ini["Denda"].sum()
         st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
 
-# ---------------------------
-# REKAP PAGE
-# ---------------------------
-elif menu == "Rekap":
-    password = st.sidebar.text_input("Masukkan Kode Admin", type="password")
-    if password != "bkq2025":
-        st.warning("Masukkan kode admin untuk melihat rekap.")
-        st.stop()
+    # ---------------------------
+    # REKAP PAGE
+    # ---------------------------
+    elif menu == "Rekap":
+        password = st.sidebar.text_input("Masukkan Kode Admin", type="password")
+        if password != "bkq2025":
+            st.warning("Masukkan kode admin untuk melihat rekap.")
+            st.stop()
 
-    st.header("📑 Rekap Data Absensi Guru")
-    df = load_sheet_df()
-    if df.empty:
-        st.info("Belum ada data absensi.")
-        st.stop()
+        st.header("📑 Rekap Data Absensi Guru")
+        df = load_sheet_df()
+        if df.empty:
+            st.info("Belum ada data absensi.")
+            st.stop()
 
-    df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
-    df = df[df['Tanggal'].notna()]  # buang baris yang tanggalnya tidak valid
+        df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
+        df = df[df['Tanggal'].notna()]  # buang baris yang tanggalnya tidak valid
 
-    tab1, tab2, tab3 = st.tabs(["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
+        tab1, tab2, tab3 = st.tabs(["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
 
-    # --- Rekap Harian
-    with tab1:
-        tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
-        df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
-        if not df_harian.empty:
-            st.dataframe(df_harian[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
-            total_denda = df_harian["Denda"].sum()
-            st.markdown(f"💰 **Total Denda:** Rp{total_denda:,}")
-            pdf_buffer = create_pdf(df_harian, f"Rekap Absensi {tgl_pilih}")
-            st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
-        else:
-            st.info("Tidak ada data pada tanggal ini.")
+        # --- Rekap Harian
+        with tab1:
+            tgl_pilih = st.date_input("Pilih tanggal", datetime.now().date())
+            df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
+            if not df_harian.empty:
+                st.dataframe(df_harian[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
+                total_denda = df_harian["Denda"].sum()
+                st.markdown(f"💰 **Total Denda:** Rp{total_denda:,}")
+                pdf_buffer = create_pdf(df_harian, f"Rekap Absensi {tgl_pilih}")
+                st.download_button("📄 Unduh PDF Rekap Harian", pdf_buffer, "rekap_harian.pdf", "application/pdf")
+            else:
+                st.info("Tidak ada data pada tanggal ini.")
 
-    # --- Rekap Bulanan
-    with tab2:
-        bulan_pilih = st.selectbox("Pilih Bulan", sorted(df['Tanggal'].dt.to_period('M').astype(str).unique()), index=-1)
-        df_bulan = df[df['Tanggal'].dt.to_period('M').astype(str) == bulan_pilih]
-        if not df_bulan.empty:
-            st.dataframe(df_bulan[['No','Tanggal','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
-            total_denda = df_bulan["Denda"].sum()
-            st.markdown(f"💰 **Total Denda Bulan {bulan_pilih}:** Rp{total_denda:,}")
-            pdf_buffer = create_pdf(df_bulan, f"Rekap Bulanan {bulan_pilih}")
-            st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, f"rekap_bulanan_{bulan_pilih}.pdf", "application/pdf")
-        else:
-            st.info("Tidak ada data pada bulan ini.")
+        # --- Rekap Bulanan
+        with tab2:
+            bulan_pilih = st.selectbox("Pilih Bulan", sorted(df['Tanggal'].dt.to_period('M').astype(str).unique()), index=-1)
+            df_bulan = df[df['Tanggal'].dt.to_period('M').astype(str) == bulan_pilih]
+            if not df_bulan.empty:
+                st.dataframe(df_bulan[['No','Tanggal','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
+                total_denda = df_bulan["Denda"].sum()
+                st.markdown(f"💰 **Total Denda Bulan {bulan_pilih}:** Rp{total_denda:,}")
+                pdf_buffer = create_pdf(df_bulan, f"Rekap Bulanan {bulan_pilih}")
+                st.download_button("📄 Unduh PDF Rekap Bulanan", pdf_buffer, f"rekap_bulanan_{bulan_pilih}.pdf", "application/pdf")
+            else:
+                st.info("Tidak ada data pada bulan ini.")
 
-    # --- Rekap Per Guru
-    with tab3:
-        if 'guru_pilih' not in st.session_state:
-            st.session_state.guru_pilih = sorted(df['Nama Guru'].unique())[0]
-        guru_pilih = st.selectbox(
-            "Pilih Guru", 
-            sorted(df['Nama Guru'].unique()), 
-            index=sorted(df['Nama Guru'].unique()).index(st.session_state.guru_pilih)
-        )
-        st.session_state.guru_pilih = guru_pilih
+        # --- Rekap Per Guru
+        with tab3:
+            if 'guru_pilih' not in st.session_state:
+                st.session_state.guru_pilih = sorted(df['Nama Guru'].unique())[0]
+            guru_pilih = st.selectbox(
+                "Pilih Guru", 
+                sorted(df['Nama Guru'].unique()), 
+                index=sorted(df['Nama Guru'].unique()).index(st.session_state.guru_pilih)
+            )
+            st.session_state.guru_pilih = guru_pilih
 
-        df_guru = df[df['Nama Guru'] == guru_pilih]
-        if not df_guru.empty:
-            st.dataframe(df_guru[['Tanggal','Jam Masuk','Status','Denda','Keterangan']])
-            total_denda = df_guru["Denda"].sum()
-            st.markdown(f"💰 **Total Denda {guru_pilih}:** Rp{total_denda:,}")
-            pdf_buffer = create_pdf(df_guru, f"Rekap Absensi {guru_pilih}")
-            st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
-        else:
-            st.info(f"Tidak ada data untuk {guru_pilih}.")
+            df_guru = df[df['Nama Guru'] == guru_pilih]
+            if not df_guru.empty:
+                st.dataframe(df_guru[['Tanggal','Jam Masuk','Status','Denda','Keterangan']])
+                total_denda = df_guru["Denda"].sum()
+                st.markdown(f"💰 **Total Denda {guru_pilih}:** Rp{total_denda:,}")
+                pdf_buffer = create_pdf(df_guru, f"Rekap Absensi {guru_pilih}")
+                st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
+            else:
+                st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
