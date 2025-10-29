@@ -184,14 +184,14 @@ if menu == "Absensi":
         total_denda = hari_ini["Denda"].sum()
         st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
 
-    # ---------------------------
-    # REKAP PAGE
-    # ---------------------------
-    elif menu == "Rekap":
-        password = st.sidebar.text_input("Masukkan Kode Admin", type="password")
-        if password != "bkq2025":
-            st.warning("Masukkan kode admin untuk melihat rekap.")
-            st.stop()
+# ---------------------------
+# REKAP PAGE
+# ---------------------------
+elif menu == "Rekap":
+    password = st.sidebar.text_input("Masukkan Kode Admin", type="password")
+    if password != "bkq2025":
+        st.warning("Masukkan kode admin untuk melihat rekap.")
+        st.stop()
 
         st.header("📑 Rekap Data Absensi Guru")
         df = load_sheet_df()
@@ -250,6 +250,7 @@ if menu == "Absensi":
             st.download_button("📄 Unduh PDF Rekap Guru", pdf_buffer, f"rekap_{guru_pilih}.pdf", "application/pdf")
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
