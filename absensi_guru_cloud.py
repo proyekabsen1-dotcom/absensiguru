@@ -189,7 +189,7 @@ if menu == "Absensi":
 # ---------------------------
 elif menu == "Rekap":
 
-    # ====== AUTH ADMIN ======
+    # ===== AUTH ADMIN =====
     password = st.sidebar.text_input("Masukkan Kode Admin", type="password")
     if password != "bkq2025":
         st.warning("Masukkan kode admin untuk melihat rekap.")
@@ -197,18 +197,18 @@ elif menu == "Rekap":
 
     st.header("📑 Rekap Data Absensi Guru")
 
-    # ====== LOAD DATA ======
+    # ===== LOAD DATA =====
     df = load_sheet_df()
     if df.empty:
         st.info("Belum ada data absensi.")
         st.stop()
 
-    # ====== VALIDASI TANGGAL ======
+    # ===== VALIDASI TANGGAL =====
     df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
     df = df[df['Tanggal'].notna()]
 
-    # ====== NAVIGASI REKAP ======
-    menu_rekap = st.radio(
+    # ===== MENU REKAP (SELECTBOX) =====
+    menu_rekap = st.selectbox(
         "Pilih Jenis Rekap",
         ["📅 Harian", "📆 Bulanan", "👤 Per Guru"]
     )
@@ -216,7 +216,7 @@ elif menu == "Rekap":
     st.divider()
 
     # ======================================================
-    # 🔹 REKAP HARIAN
+    # 📅 REKAP HARIAN
     # ======================================================
     if menu_rekap == "📅 Harian":
 
@@ -247,7 +247,7 @@ elif menu == "Rekap":
             st.info("Tidak ada data pada tanggal ini.")
 
     # ======================================================
-    # 🔹 REKAP BULANAN
+    # 📆 REKAP BULANAN
     # ======================================================
     elif menu_rekap == "📆 Bulanan":
 
@@ -289,7 +289,7 @@ elif menu == "Rekap":
             st.info("Tidak ada data pada bulan ini.")
 
     # ======================================================
-    # 🔹 REKAP PER GURU
+    # 👤 REKAP PER GURU
     # ======================================================
     elif menu_rekap == "👤 Per Guru":
 
@@ -327,12 +327,5 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
-
-
-
-
-       
-
-
 
 
