@@ -202,7 +202,7 @@ elif menu == "Rekap":
     df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
     df = df[df['Tanggal'].notna()]  # buang baris yang tanggalnya tidak valid
 
-    tab1, tab2, tab3 = st.tabs(["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
+    tab1, tab2, tab3 = st.radio["📅 Harian", "📆 Bulanan", "👤 Per Guru"])
 
     # --- Rekap Harian
     with tab1:
@@ -270,5 +270,6 @@ elif menu == "Rekap":
 
 
        
+
 
 
