@@ -69,15 +69,21 @@ def generate_qr_token():
     secret = "BKQ-ABSENSI-2025"
     return hashlib.sha256(f"{today}-{secret}".encode()).hexdigest()[:8]
 
-def add_watermark(image, nama):
-    img = Image.open(image).convert("RGB")
+def add_watermark(image_file, nama_guru):
+    img = Image.open(image_file).convert("RGB")
     draw = ImageDraw.Draw(img)
-    now = datetime.now(pytz.timezone("Asia/Jakarta")).strftime("%d-%m-%Y %H:%M:%S")
-    text = f"{nama} | {now} WIB"
+
+    now = datetime.now(pytz.timezone("Asia/Jakarta"))
+    text = f"{nama_guru} | {now.strftime('%d-%m-%Y %H:%M:%S')} WIB"
+
     w, h = img.size
-    draw.rectangle((10, h-35, 500, h-10), fill=(0, 0, 0))
-    draw.text((15, h-32), text, fill="white")
+    x, y = 10, h - 35
+
+    draw.rectangle((x-5, y-5, x+500, y+25), fill=(0,0,0))
+    draw.text((x, y), text, fill="white")
+
     return img
+
 
 def buat_nomor_urut(df):
     df = df.reset_index(drop=True)
@@ -130,49 +136,58 @@ menu = st.sidebar.radio("Menu", ["Absensi", "Rekap"])
 # =========================
 # ABSENSI
 # =========================
+# ---------------------------
+# ABSENSI PAGE (FINAL STABIL)
+# ---------------------------
 if menu == "Absensi":
 
-    st.subheader("📸 Absensi Selfie (Wajib di Sekolah)")
+    st.subheader("📸 Absensi Guru (Selfie Wajib)")
 
     st.info("""
-    ✅ Foto diambil langsung  
-    ✅ Waktu otomatis  
-    ✅ Lokasi dari browser  
+    ✅ Foto diambil langsung dari kamera  
+    ✅ Ada watermark waktu  
+    ❌ Tidak bisa upload foto lama  
     """)
 
-    lat = st.text_input("Latitude", disabled=True)
-    lon = st.text_input("Longitude", disabled=True)
-
-    get_location()
-
-    with st.form("absen_selfie"):
+    with st.form("form_absensi_selfie"):
         nama_guru = st.selectbox("Nama Guru", guru_list)
         foto = st.camera_input("Ambil Foto Sekarang")
 
-        submit = st.form_submit_button("Absen Sekarang")
+        submit = st.form_submit_button("✅ Absen Sekarang")
 
         if submit:
 
             if foto is None:
-                st.error("❌ Foto selfie wajib diambil")
+                st.error("❌ Foto selfie WAJIB diambil")
                 st.stop()
 
+            # Watermark foto
             foto_fix = add_watermark(foto, nama_guru)
 
+            # Waktu
             now = datetime.now(pytz.timezone("Asia/Jakarta"))
-            jam = now.strftime("%H:%M:%S")
+            jam_masuk = now.strftime("%H:%M:%S")
 
+            # Hitung denda
+            denda = hitung_denda(nama_guru, jam_masuk, "Hadir")
+
+            # Simpan foto (opsional)
+            filename = f"selfie_{nama_guru}_{now.strftime('%Y%m%d_%H%M%S')}.jpg"
+            foto_fix.save(filename)
+
+            # Simpan ke Google Sheet
             append_absen_row([
                 now.strftime("%Y-%m-%d"),
                 nama_guru,
                 "Hadir",
-                jam,
-                hitung_denda(nama_guru, jam, "Hadir"),
-                f"Lokasi: {lat}, {lon}"
+                jam_masuk,
+                denda,
+                "Selfie Kamera"
             ])
 
             st.success("✅ Absensi berhasil")
-            st.image(foto_fix)
+            st.image(foto_fix, caption="Bukti Absensi")
+
 
 
 
@@ -210,6 +225,7 @@ else:
             "rekap.pdf",
             "application/pdf"
         )
+
 
 
 
