@@ -12,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 import pytz
 from PIL import Image, ImageDraw
 import hashlib
-import qrcode
+
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -116,7 +116,7 @@ if menu == "Absensi":
 
     qr_token = generate_qr_token()
     st.subheader("🔐 QR Absensi Hari Ini")
-    st.image(qrcode.make(qr_token), width=180)
+    st.qr_code(qr_token)
 
     with st.form("absen_qr"):
         nama = st.selectbox("Nama Guru", guru_list)
@@ -182,3 +182,4 @@ else:
             "rekap.pdf",
             "application/pdf"
         )
+
