@@ -165,7 +165,7 @@ elif menu == "Rekap":
     st.header("📑 Rekap Data Absensi Guru")
 
     # ===== LOAD DATA =====
-    df = load_sheet_df()
+    df = load_data()
     if df.empty:
         st.info("Belum ada data absensi.")
         st.stop()
@@ -300,5 +300,6 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
