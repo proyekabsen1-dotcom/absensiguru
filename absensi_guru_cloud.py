@@ -11,6 +11,9 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet
 import time
 import pytz
+from PIL import Image, ImageDraw, ImageFont
+import hashlib
+
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
 
@@ -139,6 +142,29 @@ def buat_nomor_urut(df):
     df.insert(1, 'No', range(1, len(df) + 1))
     return df
 
+def generate_qr_token():
+    today = datetime.now(pytz.timezone("Asia/Jakarta")).strftime("%Y-%m-%d")
+    secret = "BKQ-ABSENSI-2025"  # boleh diganti
+    token = hashlib.sha256(f"{today}-{secret}".encode()).hexdigest()[:8]
+    return token
+
+def add_watermark(image_file, nama_guru):
+    img = Image.open(image_file).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    now = datetime.now(pytz.timezone("Asia/Jakarta"))
+    watermark_text = f"{nama_guru} | {now.strftime('%d-%m-%Y %H:%M:%S')} WIB"
+
+    width, height = img.size
+    x, y = 10, height - 30
+
+    draw.rectangle((x-5, y-5, x+450, y+20), fill=(0,0,0))
+    draw.text((x, y), watermark_text, fill="white")
+
+    return img
+
+
+
 # ---------------------------
 # HEADER
 # ---------------------------
@@ -158,6 +184,57 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 # ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
+    st.subheader("📸 Absensi QR + Selfie")
+
+qr_token_hari_ini = generate_qr_token()
+
+with st.form("form_absen_qr"):
+    nama_guru = st.selectbox("Nama Guru", guru_list)
+    input_qr = st.text_input("Masukkan Kode QR Hari Ini")
+    foto = st.camera_input("Ambil Foto Selfie Sekarang")
+
+    submit = st.form_submit_button("✅ Absen Sekarang")
+
+    if submit:
+
+        # VALIDASI QR
+        if input_qr != qr_token_hari_ini:
+            st.error("❌ QR tidak valid / bukan QR hari ini")
+            st.stop()
+
+        # VALIDASI FOTO
+        if foto is None:
+            st.error("❌ Foto selfie wajib diambil")
+            st.stop()
+
+        # WATERMARK FOTO
+        foto_watermark = add_watermark(foto, nama_guru)
+
+        # SIMPAN FOTO (opsional)
+        foto_name = f"selfie_{nama_guru}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        foto_watermark.save(foto_name)
+
+        # DATA ABSENSI
+        now = datetime.now(pytz.timezone("Asia/Jakarta"))
+        jam_masuk = now.strftime("%H:%M:%S")
+        denda = hitung_denda(nama_guru, jam_masuk, "Hadir")
+
+        row = [
+            now.strftime("%Y-%m-%d"),
+            nama_guru,
+            "Hadir",
+            jam_masuk,
+            denda,
+            "QR + Selfie"
+        ]
+
+        append_absen_row(row)
+
+        st.success("✅ Absensi berhasil")
+        st.image(foto_watermark, caption="Foto Selfie Tersimpan")
+
+
+    
     tz = pytz.timezone("Asia/Jakarta")
     placeholder = st.empty()
     
@@ -341,6 +418,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
