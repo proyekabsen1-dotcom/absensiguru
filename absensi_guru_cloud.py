@@ -91,6 +91,23 @@ def simpan_absen(row):
     ws.append_row(row)
     load_data.clear()
 
+import pandas as pd
+from datetime import datetime
+import streamlit as st
+
+# ===============================
+# FUNGSI BANTU NOMOR URUT
+# ===============================
+def buat_nomor_urut(df):
+    df = df.copy()
+    if 'No' in df.columns:
+        df.drop(columns=['No'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    df.insert(0, 'No', range(1, len(df) + 1))
+    return df
+
+
+
 # =====================================================
 # UI
 # =====================================================
@@ -290,3 +307,4 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
