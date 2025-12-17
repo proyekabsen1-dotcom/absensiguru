@@ -90,6 +90,16 @@ def sudah_absen_hari_ini(df, nama):
 def simpan_absen(row):
     ws.append_row(row)
     load_data.clear()
+    
+def buat_nomor_urut(df):
+    df = df.copy()
+    if 'No' in df.columns:
+        df.drop(columns=['No'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    df.insert(0, 'No', range(1, len(df) + 1))
+    return df
+
+
 
 # =====================================================
 # UI
@@ -181,3 +191,4 @@ elif menu == "Rekap":
         hasil = df[df["Nama Guru"] == guru]
 
     st.dataframe(hasil, use_container_width=True)
+
