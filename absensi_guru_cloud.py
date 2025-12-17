@@ -326,7 +326,7 @@ elif menu == "Rekap":
             df_guru = buat_nomor_urut(df_guru)
 
             st.dataframe(
-                df_guru[['No','Tanggal','Jam Masuk','Status','Denda','Keterangan']],
+                df_guru[['Tanggal','Jam Masuk','Status','Denda','Keterangan']],
                 use_container_width=True
             )
 
@@ -342,6 +342,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
