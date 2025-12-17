@@ -21,7 +21,7 @@ LAT_SEKOLAH = -0.9145      # GANTI
 LON_SEKOLAH = 100.4602    # GANTI
 RADIUS_METER = 150
 
-FOLDER_ID_DRIVE = "ISI_FOLDER_ID_DRIVE"
+FOLDER_ID_DRIVE = "1K6U3fz6c913a-VlYrFVV13xMvln2z0qr"
 
 GURU_LIST = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B"]
 
@@ -151,3 +151,4 @@ if st.button("✅ Absen Sekarang"):
 
     st.success("✅ Absensi berhasil")
     st.image(foto_wm)
+
