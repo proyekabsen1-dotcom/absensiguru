@@ -131,6 +131,15 @@ def play_fireworks():
     """
     st.markdown(html, unsafe_allow_html=True)
 
+def buat_nomor_urut(df):
+    df = df.copy()
+    if 'No' in df.columns:
+        df.drop(columns=['No'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    df.insert(0, 'No', range(1, len(df) + 1))
+    return df
+
+
 # ---------------------------
 # HEADER
 # ---------------------------
@@ -187,21 +196,6 @@ if menu == "Absensi":
 # ---------------------------
 # REKAP PAGE
 # ---------------------------
-import pandas as pd
-from datetime import datetime
-import streamlit as st
-
-# ===============================
-# FUNGSI BANTU NOMOR URUT
-# ===============================
-def buat_nomor_urut(df):
-    df = df.copy()
-    if 'No' in df.columns:
-        df.drop(columns=['No'], inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    df.insert(0, 'No', range(1, len(df) + 1))
-    return df
-
 elif menu == "Rekap":
 
     # ===== AUTH ADMIN =====
@@ -348,6 +342,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
