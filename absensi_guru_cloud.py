@@ -240,7 +240,7 @@ elif menu == "Rekap":
             df_harian = buat_nomor_urut(df_harian)
 
             st.dataframe(
-                df_harian[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']],
+                df_harian[['Jam Masuk','Nama Guru','Status','Denda','Keterangan']],
                 use_container_width=True
             )
 
@@ -342,6 +342,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
