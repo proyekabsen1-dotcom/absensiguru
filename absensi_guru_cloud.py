@@ -13,6 +13,8 @@ import time
 import pytz
 from PIL import Image, ImageDraw, ImageFont
 import hashlib
+import qrcode
+
 
 
 st.set_page_config(page_title="Absensi Guru SD Tahfidz BKQ", layout="wide")
@@ -184,6 +186,15 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 # ABSENSI PAGE
 # ---------------------------
 if menu == "Absensi":
+    qr_token_hari_ini = generate_qr_token()
+
+    st.markdown("### 🔐 QR Absensi Hari Ini")
+    st.info("QR ini **BERUBAH SETIAP HARI** dan hanya berlaku hari ini.")
+
+    qr_img = qrcode.make(qr_token_hari_ini)
+    st.image(qr_img, caption="Scan QR ini di sekolah")
+
+    
     st.subheader("📸 Absensi QR + Selfie")
 
     qr_token_hari_ini = generate_qr_token()
@@ -397,6 +408,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
