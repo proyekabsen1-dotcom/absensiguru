@@ -99,6 +99,37 @@ def buat_nomor_urut(df):
     df.insert(0, 'No', range(1, len(df) + 1))
     return df
 
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
+
+def create_pdf(df, title):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph(f"<b>{title}</b>", styles["Title"]))
+    elements.append(Spacer(1, 12))
+
+    if df.empty:
+        elements.append(Paragraph("Tidak ada data.", styles["Normal"]))
+    else:
+        data = [df.columns.tolist()] + df.astype(str).values.tolist()
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.lightblue),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+            ("ALIGN", (0,0), (-1,-1), "CENTER"),
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ]))
+        elements.append(table)
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 
 # =====================================================
@@ -300,6 +331,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
