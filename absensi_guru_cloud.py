@@ -207,7 +207,7 @@ elif menu == "Rekap":
     df['Tanggal'] = pd.to_datetime(df['Tanggal'], errors='coerce')
     df = df[df['Tanggal'].notna()]
 
-    # ===== MENU REKAP (SELECTBOX) =====
+    # ===== MENU REKAP =====
     menu_rekap = st.selectbox(
         "Pilih Jenis Rekap",
         ["📅 Harian", "📆 Bulanan", "👤 Per Guru"]
@@ -224,11 +224,12 @@ elif menu == "Rekap":
             "Pilih Tanggal",
             datetime.now().date()
         )
-        
-        df_harian = df[df['Tanggal'].dt.date == tgl_pilih].reset_index(drop=True)
-        df_harian.insert(0, 'No', range(1, len(df_harian) + 1))
+
+        df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
 
         if not df_harian.empty:
+            df_harian = buat_nomor_urut(df_harian)
+
             st.dataframe(
                 df_harian[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']],
                 use_container_width=True
@@ -252,10 +253,9 @@ elif menu == "Rekap":
     # ======================================================
     elif menu_rekap == "📆 Bulanan":
 
-        df_bulan = df[
-            df['Tanggal'].dt.to_period('M').astype(str) == bulan_pilih
-        ].reset_index(drop=True)
-        df_bulan.insert(0, 'No', range(1, len(df_bulan) + 1))
+        bulan_list = sorted(
+            df['Tanggal'].dt.to_period('M').astype(str).unique()
+        )
 
         if not bulan_list:
             st.info("Data bulanan belum tersedia.")
@@ -272,6 +272,8 @@ elif menu == "Rekap":
         ]
 
         if not df_bulan.empty:
+            df_bulan = buat_nomor_urut(df_bulan)
+
             st.dataframe(
                 df_bulan[['No','Tanggal','Jam Masuk','Nama Guru','Status','Denda','Keterangan']],
                 use_container_width=True
@@ -309,11 +311,11 @@ elif menu == "Rekap":
             key="guru_rekap"
         )
 
-        df_guru = df[df['Nama Guru'] == guru_pilih].reset_index(drop=True)
-        df_guru.insert(0, 'No', range(1, len(df_guru) + 1))
-
+        df_guru = df[df['Nama Guru'] == guru_pilih]
 
         if not df_guru.empty:
+            df_guru = buat_nomor_urut(df_guru)
+
             st.dataframe(
                 df_guru[['No','Tanggal','Jam Masuk','Status','Denda','Keterangan']],
                 use_container_width=True
@@ -331,6 +333,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
