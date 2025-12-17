@@ -20,7 +20,8 @@ st.set_page_config("Absensi Guru SD Tahfidz BKQ", layout="wide")
 
 # ================= SECRETS =================
 SPREADSHEET_URL = st.secrets["SPREADSHEET_URL"]
-GOOGLE_SERVICE_ACCOUNT = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+GOOGLE_SERVICE_ACCOUNT = st.secrets["GOOGLE_SERVICE_ACCOUNT"]
+
 DRIVE_FOLDER_ID = st.secrets["DRIVE_FOLDER_ID"]
 
 # ================= GOOGLE AUTH =================
@@ -147,3 +148,4 @@ if st.button("✅ Absen Sekarang"):
     st.success("✅ Absensi berhasil")
     st.image(img)
     st.markdown(f"[📍 Lihat Lokasi]({maps})")
+
