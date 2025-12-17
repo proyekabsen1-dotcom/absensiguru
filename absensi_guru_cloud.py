@@ -1,155 +1,166 @@
 import streamlit as st
-from datetime import datetime
 import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime, date
+import pytz
 import json
+import requests
 from io import BytesIO
 from PIL import Image, ImageDraw
-import pytz
-import math
-
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 
-# =====================================================
-# KONFIGURASI
-# =====================================================
-st.set_page_config("Absensi Guru BKQ", layout="centered")
+# ===============================
+# CONFIG
+# ===============================
+st.set_page_config("Absensi Guru BKQ", layout="wide")
+TZ = pytz.timezone("Asia/Jakarta")
 
-LAT_SEKOLAH = -0.16861883057236052      # GANTI, 
-LON_SEKOLAH = 100.66416954081318    # GANTI
-RADIUS_METER = 150
+SPREADSHEET_URL = st.secrets["SPREADSHEET_URL"]
+SERVICE_ACCOUNT = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
 
-FOLDER_ID_DRIVE = "1K6U3fz6c913a-VlYrFVV13xMvln2z0qr"
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 
 GURU_LIST = ["Yolan","Husnia","Rima","Rifa","Sela","Ustadz A","Ustadz B"]
 
-# =====================================================
-# AUTH GOOGLE
-# =====================================================
-credentials_dict = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
-scopes = [
+# ===============================
+# GOOGLE AUTH
+# ===============================
+scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
-creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scopes)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(SERVICE_ACCOUNT, scope)
 gc = gspread.authorize(creds)
+drive = build("drive", "v3", credentials=creds)
 
-sh = gc.open_by_url(st.secrets["SPREADSHEET_URL"])
+sh = gc.open_by_url(SPREADSHEET_URL)
 try:
     ws = sh.worksheet("Absensi")
 except:
     ws = sh.add_worksheet("Absensi", 2000, 10)
     ws.append_row([
-        "Tanggal","Nama Guru","Jam","Status","Lokasi (m)","Link Foto","Keterangan"
+        "Tanggal","Nama Guru","Jam","Lokasi","Foto","Status"
     ])
 
-# =====================================================
-# FUNGSI
-# =====================================================
+# ===============================
+# HELPERS
+# ===============================
+@st.cache_data(ttl=30)
 def load_df():
     return pd.DataFrame(ws.get_all_records())
 
-def sudah_absen(nama, tanggal):
+def sudah_absen(nama):
     df = load_df()
-    if df.empty:
-        return False
-    df["Tanggal"] = pd.to_datetime(df["Tanggal"])
+    hari = datetime.now(TZ).strftime("%Y-%m-%d")
     return not df[
-        (df["Nama Guru"] == nama) &
-        (df["Tanggal"].dt.date == tanggal)
+        (df["Nama Guru"]==nama) &
+        (df["Tanggal"]==hari)
     ].empty
 
-def jarak_meter(lat1, lon1, lat2, lon2):
-    R = 6371000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dl/2)**2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+def kirim_telegram(msg):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(url, data={
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": msg
+    })
 
-def add_watermark(image, nama, jarak):
-    img = Image.open(image).convert("RGB")
-    draw = ImageDraw.Draw(img)
-    now = datetime.now(pytz.timezone("Asia/Jakarta"))
-    text = f"{nama} | {now.strftime('%d-%m-%Y %H:%M:%S')} | {int(jarak)} m"
-    draw.rectangle((0, img.height-40, img.width, img.height), fill=(0,0,0))
-    draw.text((10, img.height-30), text, fill="white")
-    return img
+def upload_drive(img, folder):
+    meta = {"name": img.name, "parents":[folder]}
+    media = MediaIoBaseUpload(img, mimetype="image/jpeg")
+    f = drive.files().create(body=meta, media_body=media).execute()
+    return f"https://drive.google.com/file/d/{f['id']}"
 
-def upload_drive(img, filename):
-    service = build("drive", "v3", credentials=creds)
-    buffer = BytesIO()
-    img.save(buffer, format="JPEG")
-    buffer.seek(0)
+def get_folder(tanggal):
+    q = f"name='{tanggal}' and mimeType='application/vnd.google-apps.folder'"
+    r = drive.files().list(q=q).execute().get("files",[])
+    if r: return r[0]["id"]
+    f = drive.files().create(body={
+        "name": tanggal,
+        "mimeType": "application/vnd.google-apps.folder"
+    }).execute()
+    return f["id"]
 
-    media = MediaIoBaseUpload(buffer, mimetype="image/jpeg")
-    file = service.files().create(
-        body={"name": filename, "parents":[FOLDER_ID_DRIVE]},
-        media_body=media,
-        fields="webViewLink"
-    ).execute()
-    return file["webViewLink"]
+def create_pdf(df):
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = [Paragraph("Rekap Absensi Guru", styles["Title"])]
+    table = Table([df.columns.tolist()] + df.values.tolist())
+    table.setStyle(TableStyle([
+        ("GRID",(0,0),(-1,-1),1,colors.black),
+        ("BACKGROUND",(0,0),(-1,0),colors.lightgrey)
+    ]))
+    elements.append(table)
+    doc.build(elements)
+    buf.seek(0)
+    return buf
 
-# =====================================================
-# AMBIL LOKASI (GPS)
-# =====================================================
-st.markdown("""
-<script>
-navigator.geolocation.getCurrentPosition(
-(pos)=> {
-window.location.search='?lat='+pos.coords.latitude+'&lon='+pos.coords.longitude;
-});
-</script>
-""", unsafe_allow_html=True)
-
-lat = st.query_params.get("lat")
-lon = st.query_params.get("lon")
-
-# =====================================================
+# ===============================
 # UI
-# =====================================================
+# ===============================
 st.title("📸 Absensi Guru SD Tahfidz BKQ")
 
-if not lat or not lon:
-    st.warning("Menunggu lokasi GPS...")
-    st.stop()
+menu = st.sidebar.radio("Menu", ["Absensi","Rekap"])
 
-jarak = jarak_meter(float(lat), float(lon), LAT_SEKOLAH, LON_SEKOLAH)
-if jarak > RADIUS_METER:
-    st.error("❌ Anda berada di luar area sekolah")
-    st.stop()
+# ===============================
+# ABSENSI
+# ===============================
+if menu == "Absensi":
 
-nama = st.selectbox("Nama Guru", GURU_LIST)
-foto = st.camera_input("Ambil foto selfie (kamera langsung)")
+    with st.form("absen"):
+        nama = st.selectbox("Nama Guru", GURU_LIST)
+        lokasi = st.text_input("Lokasi (Google Maps otomatis dari HP)")
+        foto = st.camera_input("Ambil Foto Selfie")
+        submit = st.form_submit_button("Absen Sekarang")
 
-if st.button("✅ Absen Sekarang"):
-    now = datetime.now(pytz.timezone("Asia/Jakarta"))
+    if submit:
+        if sudah_absen(nama):
+            st.error("❌ Anda sudah absen hari ini")
+            st.stop()
 
-    if sudah_absen(nama, now.date()):
-        st.error("❌ Anda sudah absen hari ini")
+        if not foto or not lokasi:
+            st.error("❌ Foto & lokasi wajib")
+            st.stop()
+
+        now = datetime.now(TZ)
+        tanggal = now.strftime("%Y-%m-%d")
+        jam = now.strftime("%H:%M:%S")
+
+        folder = get_folder(tanggal)
+        foto.name = f"{nama}_{jam}.jpg"
+        link_foto = upload_drive(foto, folder)
+
+        ws.append_row([
+            tanggal, nama, jam, lokasi, link_foto, "Hadir"
+        ])
+
+        kirim_telegram(
+            f"📌 ABSENSI\n{nama}\n{tanggal} {jam}\n{lokasi}"
+        )
+
+        st.success("✅ Absensi berhasil")
+
+# ===============================
+# REKAP
+# ===============================
+else:
+    pwd = st.sidebar.text_input("Password Admin", type="password")
+    if pwd != "bkq2025":
         st.stop()
 
-    if not foto:
-        st.error("❌ Foto wajib")
-        st.stop()
+    df = load_df()
+    st.dataframe(df, use_container_width=True)
 
-    foto_wm = add_watermark(foto, nama, jarak)
-    nama_file = f"{nama}_{now.strftime('%Y%m%d_%H%M%S')}.jpg"
-    link = upload_drive(foto_wm, nama_file)
-
-    ws.append_row([
-        now.strftime("%Y-%m-%d"),
-        nama,
-        now.strftime("%H:%M:%S"),
-        "Hadir",
-        int(jarak),
-        link,
-        "Selfie + Lokasi"
-    ])
-
-    st.success("✅ Absensi berhasil")
-    st.image(foto_wm)
-
-
+    pdf = create_pdf(df)
+    st.download_button(
+        "📄 Download PDF",
+        pdf,
+        "rekap_absensi.pdf"
+    )
