@@ -17,8 +17,8 @@ from googleapiclient.http import MediaIoBaseUpload
 # =====================================================
 st.set_page_config("Absensi Guru BKQ", layout="centered")
 
-LAT_SEKOLAH = -0.9145      # GANTI
-LON_SEKOLAH = 100.4602    # GANTI
+LAT_SEKOLAH = -0.16861883057236052      # GANTI, 
+LON_SEKOLAH = 100.66416954081318    # GANTI
 RADIUS_METER = 150
 
 FOLDER_ID_DRIVE = "1K6U3fz6c913a-VlYrFVV13xMvln2z0qr"
@@ -151,4 +151,5 @@ if st.button("✅ Absen Sekarang"):
 
     st.success("✅ Absensi berhasil")
     st.image(foto_wm)
+
 
