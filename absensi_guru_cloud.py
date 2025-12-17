@@ -114,31 +114,39 @@ menu = st.sidebar.radio("Menu", ["Absensi", "Rekap"])
 # =========================
 if menu == "Absensi":
 
+    import urllib.parse
+
     qr_token = generate_qr_token()
+    qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + urllib.parse.quote(qr_token)
+
     st.subheader("🔐 QR Absensi Hari Ini")
-    st.qr_code(qr_token)
+    st.image(qr_url, caption="Scan QR ini di sekolah", width=200)
 
     with st.form("absen_qr"):
-        nama = st.selectbox("Nama Guru", guru_list)
-        input_qr = st.text_input("Kode QR Hari Ini")
+        nama_guru = st.selectbox("Nama Guru", guru_list)
+        input_qr = st.text_input("Masukkan Kode QR Hari Ini")
         foto = st.camera_input("Ambil Foto Selfie")
-        submit = st.form_submit_button("Absen")
+
+        submit = st.form_submit_button("✅ Absen Sekarang")
 
         if submit:
             if input_qr != qr_token:
-                st.error("❌ QR tidak valid / bukan hari ini")
+                st.error("❌ QR tidak valid / bukan QR hari ini")
                 st.stop()
+
             if foto is None:
-                st.error("❌ Selfie wajib")
+                st.error("❌ Foto selfie wajib diambil")
                 st.stop()
 
-            foto_fix = add_watermark(foto, nama)
-            jam = datetime.now(pytz.timezone("Asia/Jakarta")).strftime("%H:%M:%S")
-            denda = hitung_denda(nama, jam, "Hadir")
+            foto_fix = add_watermark(foto, nama_guru)
 
-            append_absen([
-                datetime.now().strftime("%Y-%m-%d"),
-                nama,
+            now = datetime.now(pytz.timezone("Asia/Jakarta"))
+            jam = now.strftime("%H:%M:%S")
+            denda = hitung_denda(nama_guru, jam, "Hadir")
+
+            append_absen_row([
+                now.strftime("%Y-%m-%d"),
+                nama_guru,
                 "Hadir",
                 jam,
                 denda,
@@ -146,7 +154,8 @@ if menu == "Absensi":
             ])
 
             st.success("✅ Absensi berhasil")
-            st.image(foto_fix)
+            st.image(foto_fix, caption="Selfie tersimpan")
+
 
 # =========================
 # REKAP
@@ -182,4 +191,5 @@ else:
             "rekap.pdf",
             "application/pdf"
         )
+
 
