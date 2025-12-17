@@ -2,8 +2,7 @@ streamlit
 pandas
 gspread
 oauth2client
-google-api-python-client
+pillow
 pytz
-Pillow
-requests
-reportlab
+google-api-python-client
+google-auth
