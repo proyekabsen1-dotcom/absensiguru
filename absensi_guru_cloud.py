@@ -257,8 +257,6 @@ elif menu == "Rekap":
         ].reset_index(drop=True)
         df_bulan.insert(0, 'No', range(1, len(df_bulan) + 1))
 
-        )
-
         if not bulan_list:
             st.info("Data bulanan belum tersedia.")
             st.stop()
@@ -333,6 +331,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
