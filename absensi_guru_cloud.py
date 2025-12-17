@@ -224,8 +224,9 @@ elif menu == "Rekap":
             "Pilih Tanggal",
             datetime.now().date()
         )
-
-        df_harian = df[df['Tanggal'].dt.date == tgl_pilih]
+        
+        df_harian = df[df['Tanggal'].dt.date == tgl_pilih].reset_index(drop=True)
+        df_harian.insert(0, 'No', range(1, len(df_harian) + 1))
 
         if not df_harian.empty:
             st.dataframe(
@@ -251,8 +252,11 @@ elif menu == "Rekap":
     # ======================================================
     elif menu_rekap == "📆 Bulanan":
 
-        bulan_list = sorted(
-            df['Tanggal'].dt.to_period('M').astype(str).unique()
+        df_bulan = df[
+            df['Tanggal'].dt.to_period('M').astype(str) == bulan_pilih
+        ].reset_index(drop=True)
+        df_bulan.insert(0, 'No', range(1, len(df_bulan) + 1))
+
         )
 
         if not bulan_list:
@@ -307,11 +311,13 @@ elif menu == "Rekap":
             key="guru_rekap"
         )
 
-        df_guru = df[df['Nama Guru'] == guru_pilih]
+        df_guru = df[df['Nama Guru'] == guru_pilih].reset_index(drop=True)
+        df_guru.insert(0, 'No', range(1, len(df_guru) + 1))
+
 
         if not df_guru.empty:
             st.dataframe(
-                df_guru[['Tanggal','Jam Masuk','Status','Denda','Keterangan']],
+                df_guru[['No','Tanggal','Jam Masuk','Status','Denda','Keterangan']],
                 use_container_width=True
             )
 
@@ -327,5 +333,6 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
