@@ -2,10 +2,8 @@ streamlit
 pandas
 gspread
 oauth2client
-pillow
-pytz
-reportlab
 google-api-python-client
-google-auth
-google-auth-httplib2
-google-auth-oauthlib
+pytz
+Pillow
+requests
+reportlab
