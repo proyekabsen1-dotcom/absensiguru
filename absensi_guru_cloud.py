@@ -186,64 +186,58 @@ menu = st.sidebar.radio("📋 Menu", ["Absensi","Rekap"])
 if menu == "Absensi":
     st.subheader("📸 Absensi QR + Selfie")
 
-qr_token_hari_ini = generate_qr_token()
+    qr_token_hari_ini = generate_qr_token()
 
-with st.form("form_absen_qr"):
-    nama_guru = st.selectbox("Nama Guru", guru_list)
-    input_qr = st.text_input("Masukkan Kode QR Hari Ini")
-    foto = st.camera_input("Ambil Foto Selfie Sekarang")
+    with st.form("form_absen_qr"):
+        nama_guru = st.selectbox("Nama Guru", guru_list)
+        input_qr = st.text_input("Masukkan Kode QR Hari Ini")
+        foto = st.camera_input("Ambil Foto Selfie Sekarang")
 
-    submit = st.form_submit_button("✅ Absen Sekarang")
+        submit = st.form_submit_button("✅ Absen Sekarang")
 
-    if submit:
+        if submit:
+            if input_qr != qr_token_hari_ini:
+                st.error("❌ QR tidak valid / bukan QR hari ini")
+                st.stop()
 
-        # VALIDASI QR
-        if input_qr != qr_token_hari_ini:
-            st.error("❌ QR tidak valid / bukan QR hari ini")
-            st.stop()
+            if foto is None:
+                st.error("❌ Foto selfie wajib diambil")
+                st.stop()
 
-        # VALIDASI FOTO
-        if foto is None:
-            st.error("❌ Foto selfie wajib diambil")
-            st.stop()
+            foto_watermark = add_watermark(foto, nama_guru)
 
-        # WATERMARK FOTO
-        foto_watermark = add_watermark(foto, nama_guru)
+            foto_name = f"selfie_{nama_guru}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+            foto_watermark.save(foto_name)
 
-        # SIMPAN FOTO (opsional)
-        foto_name = f"selfie_{nama_guru}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-        foto_watermark.save(foto_name)
+            now = datetime.now(pytz.timezone("Asia/Jakarta"))
+            jam_masuk = now.strftime("%H:%M:%S")
+            denda = hitung_denda(nama_guru, jam_masuk, "Hadir")
 
-        # DATA ABSENSI
-        now = datetime.now(pytz.timezone("Asia/Jakarta"))
-        jam_masuk = now.strftime("%H:%M:%S")
-        denda = hitung_denda(nama_guru, jam_masuk, "Hadir")
+            row = [
+                now.strftime("%Y-%m-%d"),
+                nama_guru,
+                "Hadir",
+                jam_masuk,
+                denda,
+                "QR + Selfie"
+            ]
 
-        row = [
-            now.strftime("%Y-%m-%d"),
-            nama_guru,
-            "Hadir",
-            jam_masuk,
-            denda,
-            "QR + Selfie"
-        ]
+            append_absen_row(row)
 
-        append_absen_row(row)
+            st.success("✅ Absensi berhasil")
+            st.image(foto_watermark, caption="Foto Selfie Tersimpan")
 
-        st.success("✅ Absensi berhasil")
-        st.image(foto_watermark, caption="Foto Selfie Tersimpan")
-
-
-    
+    # ===== ABSENSI MANUAL (OPSIONAL) =====
     tz = pytz.timezone("Asia/Jakarta")
     placeholder = st.empty()
-    
-    st.subheader("Input Absensi")
+
+    st.subheader("Input Absensi Manual")
     with st.form("form_absen", clear_on_submit=True):
-        nama_guru = st.selectbox("Nama Guru", guru_list)
+        nama_guru = st.selectbox("Nama Guru", guru_list, key="manual")
         status_manual = st.selectbox("Status", ["Hadir","Izin","Cuti","Tidak Hadir"])
         keterangan = st.text_input("Keterangan (opsional)")
         submitted = st.form_submit_button("✨ Absen Sekarang", type="primary")
+
         if submitted:
             now = datetime.now(tz)
             jam_masuk = now.strftime("%H:%M:%S")
@@ -251,23 +245,8 @@ with st.form("form_absen_qr"):
             row = [now.strftime("%Y-%m-%d"), nama_guru, status_manual, jam_masuk, denda, keterangan]
             append_absen_row(row)
             play_fireworks()
-            st.audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg")
             st.success(f"🎆 Absen berhasil! Denda: Rp{denda}")
-    
-    # Update jam real-time
-    for _ in range(10):
-        now = datetime.now(tz)
-        placeholder.markdown(f"**Tanggal:** {now.strftime('%A, %d %B %Y')}  \n⏰ **Waktu (WIB):** {now.strftime('%H:%M:%S')}")
 
-    # Tabel absen hari ini
-    df_today = load_sheet_df()
-    df_today['Tanggal'] = pd.to_datetime(df_today['Tanggal'], errors='coerce')
-    hari_ini = df_today[df_today['Tanggal'].notna() & (df_today['Tanggal'].dt.date == datetime.now(tz).date())]
-    if not hari_ini.empty:
-        st.subheader("✅ Guru yang sudah absen hari ini")
-        st.dataframe(hari_ini[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']])
-        total_denda = hari_ini["Denda"].sum()
-        st.markdown(f"💰 **Total Denda Hari Ini:** Rp{total_denda:,}")
 
 # ---------------------------
 # REKAP PAGE
@@ -418,6 +397,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
