@@ -131,8 +131,13 @@ def play_fireworks():
     """
     st.markdown(html, unsafe_allow_html=True)
 
-
-
+def buat_nomor_urut(df):
+    df = df.copy()
+    if 'No' in df.columns:
+        df.drop(columns=['No'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    df.insert(1, 'No', range(1, len(df) + 1))
+    return df
 
 # ---------------------------
 # HEADER
@@ -336,6 +341,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
