@@ -136,7 +136,7 @@ def buat_nomor_urut(df):
     if 'No' in df.columns:
         df.drop(columns=['No'], inplace=True)
     df.reset_index(drop=True, inplace=True)
-    df.insert(0, 'No', range(1, len(df) + 1))
+    df.insert(1, 'No', range(1, len(df) + 1))
     return df
 
 
@@ -342,6 +342,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
