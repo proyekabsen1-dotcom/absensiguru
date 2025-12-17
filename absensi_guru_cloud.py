@@ -131,13 +131,7 @@ def play_fireworks():
     """
     st.markdown(html, unsafe_allow_html=True)
 
-def buat_nomor_urut(df):
-    df = df.copy()
-    if 'No' in df.columns:
-        df.drop(columns=['No'], inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    df.insert(1, 'No', range(1, len(df) + 1))
-    return df
+
 
 
 # ---------------------------
@@ -240,7 +234,7 @@ elif menu == "Rekap":
             df_harian = buat_nomor_urut(df_harian)
 
             st.dataframe(
-                df_harian[['Jam Masuk','Nama Guru','Status','Denda','Keterangan']],
+                df_harian[['No','Jam Masuk','Nama Guru','Status','Denda','Keterangan']],
                 use_container_width=True
             )
 
@@ -326,7 +320,7 @@ elif menu == "Rekap":
             df_guru = buat_nomor_urut(df_guru)
 
             st.dataframe(
-                df_guru[['Tanggal','Jam Masuk','Status','Denda','Keterangan']],
+                df_guru[['No','Tanggal','Jam Masuk','Status','Denda','Keterangan']],
                 use_container_width=True
             )
 
@@ -342,6 +336,7 @@ elif menu == "Rekap":
             )
         else:
             st.info(f"Tidak ada data untuk {guru_pilih}.")
+
 
 
 
