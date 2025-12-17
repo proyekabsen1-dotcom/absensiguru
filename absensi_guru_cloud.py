@@ -102,6 +102,24 @@ def create_pdf(df, title):
     buf.seek(0)
     return buf
 
+def get_location():
+    return st.components.v1.html(
+        """
+        <script>
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                document.getElementById("lat").value = pos.coords.latitude;
+                document.getElementById("lon").value = pos.coords.longitude;
+            }
+        );
+        </script>
+        <input id="lat" value="" />
+        <input id="lon" value="" />
+        """,
+        height=0
+    )
+
+
 # =========================
 # HEADER
 # =========================
@@ -114,25 +132,26 @@ menu = st.sidebar.radio("Menu", ["Absensi", "Rekap"])
 # =========================
 if menu == "Absensi":
 
-    import urllib.parse
+    st.subheader("📸 Absensi Selfie (Wajib di Sekolah)")
 
-    qr_token = generate_qr_token()
-    qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + urllib.parse.quote(qr_token)
+    st.info("""
+    ✅ Foto diambil langsung  
+    ✅ Waktu otomatis  
+    ✅ Lokasi dari browser  
+    """)
 
-    st.subheader("🔐 QR Absensi Hari Ini")
-    st.image(qr_url, caption="Scan QR ini di sekolah", width=200)
+    lat = st.text_input("Latitude", disabled=True)
+    lon = st.text_input("Longitude", disabled=True)
 
-    with st.form("absen_qr"):
+    get_location()
+
+    with st.form("absen_selfie"):
         nama_guru = st.selectbox("Nama Guru", guru_list)
-        input_qr = st.text_input("Masukkan Kode QR Hari Ini")
-        foto = st.camera_input("Ambil Foto Selfie")
+        foto = st.camera_input("Ambil Foto Sekarang")
 
-        submit = st.form_submit_button("✅ Absen Sekarang")
+        submit = st.form_submit_button("Absen Sekarang")
 
         if submit:
-            if input_qr != qr_token:
-                st.error("❌ QR tidak valid / bukan QR hari ini")
-                st.stop()
 
             if foto is None:
                 st.error("❌ Foto selfie wajib diambil")
@@ -142,19 +161,19 @@ if menu == "Absensi":
 
             now = datetime.now(pytz.timezone("Asia/Jakarta"))
             jam = now.strftime("%H:%M:%S")
-            denda = hitung_denda(nama_guru, jam, "Hadir")
 
             append_absen_row([
                 now.strftime("%Y-%m-%d"),
                 nama_guru,
                 "Hadir",
                 jam,
-                denda,
-                "QR + Selfie"
+                hitung_denda(nama_guru, jam, "Hadir"),
+                f"Lokasi: {lat}, {lon}"
             ])
 
             st.success("✅ Absensi berhasil")
-            st.image(foto_fix, caption="Selfie tersimpan")
+            st.image(foto_fix)
+
 
 
 # =========================
@@ -191,5 +210,6 @@ else:
             "rekap.pdf",
             "application/pdf"
         )
+
 
 
